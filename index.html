@@ -426,6 +426,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
         <button class="btn btn-secondary btn-sm" onclick="exportData()">Export backup</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer">Import backup<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         <button class="btn btn-secondary btn-sm" onclick="resetToDefaults()">Reset to defaults</button>
+        <button class="btn btn-secondary btn-sm" onclick="forcePush()" title="Force push all data to Supabase now">&#8593; Sync now</button>
       </div>
     </div>
     <div class="type-legend">
@@ -529,7 +530,15 @@ function saveToSupabase(title,jsonStr){
     headers:headers,
     body:JSON.stringify({title:title,content:jsonStr})
   }).then(function(r){
-    if(!r.ok) throw new Error('Supabase write failed: '+r.status);
+    if(!r.ok){
+      var status=r.status;
+      return r.text().then(function(body){
+        throw new Error('Supabase write failed ('+status+'): '+body);
+      }).catch(function(e){
+        if(e.message&&e.message.indexOf('Supabase write failed')===0) throw e;
+        throw new Error('Supabase write failed: '+status);
+      });
+    }
     return r;
   });
 }
@@ -609,15 +618,34 @@ function loadData(){
   }).catch(function(err){
     console.warn('Supabase offline:',err);
     spLoaded=false;
-    showSpStatus(false);
+    showSpStatus(false,err&&err.message?err.message:'');
     startSharePointPolling();
   });
 }
 
-function showSpStatus(online){
+var SP_STATUS_MAX_DETAIL=80; // max characters shown inline for unknown errors
+
+function showSpStatus(online,detail){
   var el=document.getElementById('sp-status');if(!el)return;
-  el.innerHTML=online?'&#9679; Connected':'&#9679; Offline — changes save locally only';
-  el.style.color=online?'#2d7a2d':'#cc6600';
+  if(online){
+    el.innerHTML='&#9679; Connected';
+    el.style.color='#2d7a2d';
+    el.title='';
+  } else {
+    var hint='';
+    if(detail){
+      // 42501 = PostgreSQL insufficient_privilege (RLS blocking write)
+      if(detail.indexOf('42501')!==-1||detail.indexOf('403')!==-1) hint=' (permission denied \u2014 run supabase-setup.sql)';
+      // 42P01 = PostgreSQL undefined_table (table does not exist)
+      else if(detail.indexOf('42P01')!==-1||detail.indexOf('404')!==-1) hint=' (table missing \u2014 run supabase-setup.sql)';
+      // 400 or unique constraint missing = schema not set up for upsert
+      else if(detail.indexOf('400')!==-1||detail.indexOf('unique')!==-1) hint=' (schema error \u2014 run supabase-setup.sql)';
+      else hint=' ('+detail.substring(0,SP_STATUS_MAX_DETAIL)+(detail.length>SP_STATUS_MAX_DETAIL?'\u2026':'')+')';
+    }
+    el.innerHTML='&#9679; Offline &mdash; changes save locally only'+hint;
+    el.style.color='#cc6600';
+    el.title=detail||'';
+  }
   el.style.display='block';
 }
 
@@ -670,7 +698,7 @@ function scheduleSupabasePush(){
       .catch(function(err){
         console.warn('Supabase save failed:',err);
         spLoaded=false;
-        showSpStatus(false);
+        showSpStatus(false,err&&err.message?err.message:'');
       })
       .finally(function(){
         pushInFlight=false;
@@ -702,6 +730,29 @@ function hasPendingLocalChanges(){
     }catch(e){}
   }
   return JSON.stringify(DATA)!==syncedSections||JSON.stringify(DOCLIB)!==syncedLibrary;
+}
+
+function forcePush(){
+  if(pushInFlight){showToast('Sync already in progress...');return;}
+  var sectionsPayload=JSON.stringify({v:Date.now(),data:DATA});
+  var libraryPayload=JSON.stringify({v:Date.now(),data:DOCLIB});
+  pushInFlight=true;
+  showToast('Syncing to cloud\u2026');
+  Promise.all([saveToSupabase('sections',sectionsPayload),saveToSupabase('library',libraryPayload)])
+    .then(function(){
+      lastSyncedSectionsStr=sectionsPayload;
+      lastSyncedLibraryStr=libraryPayload;
+      spLoaded=true;
+      showSpStatus(true);
+      showToast('Sync complete \u2713');
+    })
+    .catch(function(err){
+      console.warn('Force push failed:',err);
+      spLoaded=false;
+      showSpStatus(false,err&&err.message?err.message:'');
+      showToast('Sync failed \u2014 see status bar');
+    })
+    .finally(function(){pushInFlight=false;});
 }
 
 function startSharePointPolling(){
@@ -739,7 +790,7 @@ function startSharePointPolling(){
     }).catch(function(err){
       console.warn('Supabase poll failed:',err);
       spLoaded=false;
-      showSpStatus(false);
+      showSpStatus(false,err&&err.message?err.message:'');
     }).finally(function(){
       pullInFlight=false;
     });
