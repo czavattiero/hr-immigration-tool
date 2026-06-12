@@ -596,6 +596,8 @@ var remotePollTimer = null;
 var localLastChangedAt = 0;
 var lastSyncedSectionsStr = null;
 var lastSyncedLibraryStr = null;
+var pushRetryTimer = null;
+var PUSH_RETRY_MS = 12000; // retry a failed push after 12 s
 
 function loadData(){
   // Render immediately with defaults (or localStorage fallback)
@@ -699,6 +701,9 @@ function scheduleSupabasePush(){
         console.warn('Supabase save failed:',err);
         spLoaded=false;
         showSpStatus(false,err&&err.message?err.message:'');
+        // Schedule a retry so a transient failure does not permanently block sync.
+        clearTimeout(pushRetryTimer);
+        pushRetryTimer=setTimeout(function(){pushRetryTimer=null;scheduleSupabasePush();},PUSH_RETRY_MS);
       })
       .finally(function(){
         pushInFlight=false;
@@ -755,46 +760,55 @@ function forcePush(){
     .finally(function(){pushInFlight=false;});
 }
 
+function doPoll(){
+  if(pullInFlight||pushInFlight) return;
+  pullInFlight=true;
+  loadFromSupabase().then(function(result){
+    spLoaded=true;
+    showSpStatus(true);
+    var now=Date.now();
+    var changed=false;
+    if(result.sections&&isUsable(result.sections)){
+      var remoteSectionsStr=result.sectionsRaw||JSON.stringify(result.sections);
+      if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
+        DATA=result.sections;
+        try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
+        lastSyncedSectionsStr=remoteSectionsStr;
+        changed=true;
+      }
+    }
+    if(result.library&&Array.isArray(result.library)){
+      var remoteLibraryStr=result.libraryRaw||JSON.stringify(result.library);
+      if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
+        DOCLIB=result.library;
+        try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
+        lastSyncedLibraryStr=remoteLibraryStr;
+        changed=true;
+      }
+    }
+    if(changed){
+      renderIntake();
+      if(document.getElementById('page-editor').classList.contains('active')) renderEditor();
+    }
+  }).catch(function(err){
+    console.warn('Supabase poll failed:',err);
+    spLoaded=false;
+    showSpStatus(false,err&&err.message?err.message:'');
+  }).finally(function(){
+    pullInFlight=false;
+  });
+}
+
 function startSharePointPolling(){
   if(remotePollTimer) return;
-  remotePollTimer=setInterval(function(){
-    if(pullInFlight||pushInFlight) return;
-    pullInFlight=true;
-    loadFromSupabase().then(function(result){
-      spLoaded=true;
-      showSpStatus(true);
-      var now=Date.now();
-      var changed=false;
-      if(result.sections&&isUsable(result.sections)){
-        var remoteSectionsStr=result.sectionsRaw||JSON.stringify(result.sections);
-        if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
-          DATA=result.sections;
-          try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
-          lastSyncedSectionsStr=remoteSectionsStr;
-          changed=true;
-        }
-      }
-      if(result.library&&Array.isArray(result.library)){
-        var remoteLibraryStr=result.libraryRaw||JSON.stringify(result.library);
-        if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
-          DOCLIB=result.library;
-          try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
-          lastSyncedLibraryStr=remoteLibraryStr;
-          changed=true;
-        }
-      }
-      if(changed){
-        renderIntake();
-        if(document.getElementById('page-editor').classList.contains('active')) renderEditor();
-      }
-    }).catch(function(err){
-      console.warn('Supabase poll failed:',err);
-      spLoaded=false;
-      showSpStatus(false,err&&err.message?err.message:'');
-    }).finally(function(){
-      pullInFlight=false;
-    });
-  },SHAREPOINT_POLL_MS);
+  remotePollTimer=setInterval(doPoll,SHAREPOINT_POLL_MS);
+  // Pull immediately whenever the tab becomes visible again — browsers throttle
+  // setInterval for background tabs (Chrome: ≥1 min after 5 min backgrounded,
+  // Safari: even more aggressively), so without this users see stale data every
+  // time they switch back to the tab.
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) doPoll();
+  });
 }
 
 
