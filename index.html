@@ -373,7 +373,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <span id="tab-lock-icon">&#128274;</span> Edit sections
   </div>
   <button class="nav-lock-btn" id="nav-lock-btn" style="display:none" onclick="lockEditor()">Lock editor</button>
-  <span id="sp-status" style="display:none;font-size:11px;margin-left:12px;font-family:'DM Sans',sans-serif"></span>
+  <span id="sp-status" style="font-size:11px;margin-left:12px;font-family:'DM Sans',sans-serif"></span>
 </nav>
 
 <!-- INTAKE PAGE -->
@@ -494,15 +494,27 @@ var SUPABASE_TABLE = 'hr_tool_data';
 /* ===== SUPABASE API ===== */
 function loadFromSupabase(){
   var headers={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
-  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE+'?select=title,content',{headers:headers})
+  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE+'?select=title,content&order=id.desc',{headers:headers})
     .then(function(r){if(!r.ok) throw new Error('Supabase read failed: '+r.status);return r.json();})
     .then(function(rows){
       var si=rows.find(function(r){return r.title==='sections';});
       var li=rows.find(function(r){return r.title==='library';});
-      var sections=null,library=null;
-      if(si&&si.content){try{sections=JSON.parse(si.content);}catch(e){}}
-      if(li&&li.content){try{library=JSON.parse(li.content);}catch(e){}}
-      return {sections:sections,library:library};
+      var sections=null,library=null,sectionsRaw=null,libraryRaw=null;
+      if(si&&si.content){
+        sectionsRaw=si.content;
+        try{
+          var parsedSections=JSON.parse(si.content);
+          sections=parsedSections&&typeof parsedSections==='object'&&parsedSections.data!==undefined?parsedSections.data:parsedSections;
+        }catch(e){}
+      }
+      if(li&&li.content){
+        libraryRaw=li.content;
+        try{
+          var parsedLibrary=JSON.parse(li.content);
+          library=parsedLibrary&&typeof parsedLibrary==='object'&&parsedLibrary.data!==undefined?parsedLibrary.data:parsedLibrary;
+        }catch(e){}
+      }
+      return {sections:sections,library:library,sectionsRaw:sectionsRaw,libraryRaw:libraryRaw};
     });
 }
 function saveToSupabase(title,jsonStr){
@@ -512,7 +524,7 @@ function saveToSupabase(title,jsonStr){
     'Content-Type':'application/json',
     'Prefer':'resolution=merge-duplicates'
   };
-  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE,{
+  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE+'?on_conflict=title',{
     method:'POST',
     headers:headers,
     body:JSON.stringify({title:title,content:jsonStr})
@@ -551,7 +563,7 @@ var DEFAULT_DATA=[
 var LOCAL_KEY  = 'intake_v10_local';
 var LIB_KEY    = 'intake_lib_v2';
 var SHAREPOINT_PUSH_DEBOUNCE_MS = 1200;
-var SHAREPOINT_POLL_MS = 5000;
+var SHAREPOINT_POLL_MS = 3000;
 var REMOTE_APPLY_GRACE_MS = 2500;
 
 function isUsable(d){
@@ -588,8 +600,8 @@ function loadData(){
     var changed=false;
     if(result.sections&&isUsable(result.sections)){DATA=result.sections;try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}changed=true;}
     if(result.library&&Array.isArray(result.library)){DOCLIB=result.library;try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}changed=true;}
-    lastSyncedSectionsStr = JSON.stringify(DATA);
-    lastSyncedLibraryStr = JSON.stringify(DOCLIB);
+    lastSyncedSectionsStr = result.sectionsRaw || JSON.stringify(DATA);
+    lastSyncedLibraryStr = result.libraryRaw || JSON.stringify(DOCLIB);
     spLoaded=true;
     if(changed)renderIntake();
     showSpStatus(true);
@@ -644,14 +656,14 @@ function scheduleSupabasePush(){
   clearTimeout(pushSyncTimer);
   pushSyncTimer=setTimeout(function(){
     if(pushInFlight){pushQueued=true;return;}
-    var sectionsStr=JSON.stringify(DATA);
-    var libraryStr=JSON.stringify(DOCLIB);
-    if(sectionsStr===lastSyncedSectionsStr&&libraryStr===lastSyncedLibraryStr) return;
+    var sectionsPayload=JSON.stringify({v:Date.now(),data:DATA});
+    var libraryPayload=JSON.stringify({v:Date.now(),data:DOCLIB});
+    if(!hasPendingLocalChanges()) return;
     pushInFlight=true;
-    Promise.all([saveToSupabase('sections',sectionsStr),saveToSupabase('library',libraryStr)])
+    Promise.all([saveToSupabase('sections',sectionsPayload),saveToSupabase('library',libraryPayload)])
       .then(function(){
-        lastSyncedSectionsStr=sectionsStr;
-        lastSyncedLibraryStr=libraryStr;
+        lastSyncedSectionsStr=sectionsPayload;
+        lastSyncedLibraryStr=libraryPayload;
         spLoaded=true;
         showSpStatus(true);
       })
@@ -671,7 +683,25 @@ function scheduleSupabasePush(){
 }
 
 function hasPendingLocalChanges(){
-  return JSON.stringify(DATA)!==lastSyncedSectionsStr||JSON.stringify(DOCLIB)!==lastSyncedLibraryStr;
+  var syncedSections = lastSyncedSectionsStr;
+  var syncedLibrary = lastSyncedLibraryStr;
+  if(syncedSections){
+    try{
+      var parsedSections = JSON.parse(syncedSections);
+      syncedSections = parsedSections&&typeof parsedSections==='object'&&parsedSections.data!==undefined
+        ? JSON.stringify(parsedSections.data)
+        : JSON.stringify(parsedSections);
+    }catch(e){}
+  }
+  if(syncedLibrary){
+    try{
+      var parsedLibrary = JSON.parse(syncedLibrary);
+      syncedLibrary = parsedLibrary&&typeof parsedLibrary==='object'&&parsedLibrary.data!==undefined
+        ? JSON.stringify(parsedLibrary.data)
+        : JSON.stringify(parsedLibrary);
+    }catch(e){}
+  }
+  return JSON.stringify(DATA)!==syncedSections||JSON.stringify(DOCLIB)!==syncedLibrary;
 }
 
 function startSharePointPolling(){
@@ -685,7 +715,7 @@ function startSharePointPolling(){
       var now=Date.now();
       var changed=false;
       if(result.sections&&isUsable(result.sections)){
-        var remoteSectionsStr=JSON.stringify(result.sections);
+        var remoteSectionsStr=result.sectionsRaw||JSON.stringify(result.sections);
         if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
           DATA=result.sections;
           try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
@@ -694,7 +724,7 @@ function startSharePointPolling(){
         }
       }
       if(result.library&&Array.isArray(result.library)){
-        var remoteLibraryStr=JSON.stringify(result.library);
+        var remoteLibraryStr=result.libraryRaw||JSON.stringify(result.library);
         if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
           DOCLIB=result.library;
           try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
