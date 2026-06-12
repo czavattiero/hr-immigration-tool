@@ -374,6 +374,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   </div>
   <button class="nav-lock-btn" id="nav-lock-btn" style="display:none" onclick="lockEditor()">Lock editor</button>
   <span id="sp-status" style="font-size:11px;margin-left:12px;font-family:'DM Sans',sans-serif"></span>
+  <button id="force-sync-btn" onclick="forceSyncNow()" aria-label="Pull latest data from server and refresh" title="Pull latest data from server and refresh" style="margin-left:8px;font-size:11px;padding:3px 8px;border:1px solid #bbb;border-radius:4px;background:#f5f5f5;cursor:pointer;font-family:'DM Sans',sans-serif">&#8635; Sync</button>
 </nav>
 
 <!-- INTAKE PAGE -->
@@ -651,6 +652,39 @@ function showSpStatus(online,detail){
 
 function retryLoad(){DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));DOCLIB=JSON.parse(JSON.stringify(DEFAULT_LIB));loadData();}
 function hardReset(){DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));saveData();answers={};renderIntake();showToast('Default questions restored');}
+function forceSyncNow(){
+  var btn=document.getElementById('force-sync-btn');
+  if(btn){btn.disabled=true;btn.textContent='Syncing\u2026';}
+  // Reset the last-synced strings and local-change timestamp so the polling
+  // logic treats remote data as unconditionally newer than local state,
+  // ensuring incoming data is always applied regardless of the grace period.
+  localLastChangedAt=0;
+  lastSyncedSectionsStr='';
+  lastSyncedLibraryStr='';
+  loadFromSupabase().then(function(result){
+    var changed=false;
+    if(result.sections&&isUsable(result.sections)){
+      DATA=result.sections;
+      try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
+      lastSyncedSectionsStr=result.sectionsRaw||JSON.stringify(result.sections);
+      changed=true;
+    }
+    if(result.library&&Array.isArray(result.library)){
+      DOCLIB=result.library;
+      try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
+      lastSyncedLibraryStr=result.libraryRaw||JSON.stringify(result.library);
+      changed=true;
+    }
+    if(changed){renderIntake();if(document.getElementById('page-editor').classList.contains('active'))renderEditor();}
+    showSpStatus(true);
+    showToast('Synced with server');
+  }).catch(function(err){
+    showSpStatus(false,err&&err.message?err.message:'');
+    showToast('Sync failed \u2014 see status bar');
+  }).finally(function(){
+    if(btn){btn.disabled=false;btn.innerHTML='&#8635; Sync';}
+  });
+}
 
 var saveTimer=null;
 
