@@ -696,6 +696,7 @@ function scheduleSupabasePush(){
         lastSyncedLibraryStr=libraryPayload;
         spLoaded=true;
         showSpStatus(true);
+        clearTimeout(pushRetryTimer); pushRetryTimer=null; // push succeeded, cancel any pending retry
       })
       .catch(function(err){
         console.warn('Supabase save failed:',err);
@@ -1599,7 +1600,7 @@ if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')su
 // setInterval for background tabs (Chrome: ≥1 min after 5 min backgrounded,
 // Safari: more aggressively), so without this users see stale data every time
 // they switch back to the tab.
-document.addEventListener('visibilitychange',function(){if(!document.hidden)doPoll();});
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&remotePollTimer)doPoll();});
 loadData();
 // Capture source AFTER full parse — script tag content is now in DOM
 var _originalSource = null;
