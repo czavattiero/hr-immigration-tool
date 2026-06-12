@@ -734,6 +734,10 @@ function scheduleSharePointPush(){
   },SHAREPOINT_PUSH_DEBOUNCE_MS);
 }
 
+function hasPendingLocalChanges(){
+  return JSON.stringify(DATA)!==lastSyncedSectionsStr||JSON.stringify(DOCLIB)!==lastSyncedLibraryStr;
+}
+
 function startSharePointPolling(){
   if(remotePollTimer) return;
   remotePollTimer=setInterval(function(){
@@ -746,18 +750,18 @@ function startSharePointPolling(){
       var changed=false;
       if(result.sections&&isUsable(result.sections)){
         var remoteSectionsStr=JSON.stringify(result.sections);
-        if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS){
+        if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
           DATA=result.sections;
-          try{localStorage.setItem(LOCAL_KEY,remoteSectionsStr);}catch(e){}
+          try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
           lastSyncedSectionsStr=remoteSectionsStr;
           changed=true;
         }
       }
       if(result.library&&Array.isArray(result.library)){
         var remoteLibraryStr=JSON.stringify(result.library);
-        if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS){
+        if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
           DOCLIB=result.library;
-          try{localStorage.setItem(LIB_KEY,remoteLibraryStr);}catch(e){}
+          try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
           lastSyncedLibraryStr=remoteLibraryStr;
           changed=true;
         }
