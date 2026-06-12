@@ -131,8 +131,6 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .btn-secondary:hover{border-color:var(--red);color:var(--red)}
 .btn-danger{background:var(--danger-light);color:var(--danger);border:1.5px solid rgba(139,58,42,.2)}
 .btn-danger:hover{background:#f7dbd7}
-.btn-publish{background:var(--red);color:#fff;border:1.5px solid var(--darkred)}
-.btn-publish:hover{background:var(--red2)}
 .btn-sm{padding:6px 13px;font-size:12px}
 
 /* Doc Library */
@@ -422,14 +420,13 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   <div class="wide-wrap">
     <div class="editor-top">
       <div>
-        <div class="save-note">All changes auto-save in this browser. Use <strong>Publish to file</strong> to bake your content into a new HTML file &mdash; replace the one on your shared folder so everyone gets your latest version.</div>
+        <div class="save-note">All changes auto-save and sync across editors through SharePoint. Keep this page open to receive live updates.</div>
       </div>
       <div class="editor-actions">
         <button class="btn btn-secondary btn-sm" onclick="openChangePw()">Change password</button>
         <button class="btn btn-secondary btn-sm" onclick="exportData()">Export backup</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer">Import backup<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         <button class="btn btn-secondary btn-sm" onclick="resetToDefaults()">Reset to defaults</button>
-        <button class="btn btn-publish btn-sm" onclick="publishToFile()">&#128190; Publish to file</button>
       </div>
     </div>
     <div class="type-legend">
@@ -623,6 +620,9 @@ var DEFAULT_DATA=[
 
 var LOCAL_KEY  = 'intake_v10_local';
 var LIB_KEY    = 'intake_lib_v2';
+var SHAREPOINT_PUSH_DEBOUNCE_MS = 1200;
+var SHAREPOINT_POLL_MS = 5000;
+var REMOTE_APPLY_GRACE_MS = 2500;
 
 function isUsable(d){
   if(!Array.isArray(d)) return false;
@@ -637,24 +637,38 @@ var DATA   = JSON.parse(JSON.stringify(DEFAULT_DATA));
 var DOCLIB = JSON.parse(JSON.stringify(DEFAULT_LIB));
 var answers = {};
 var spLoaded = false;
+var pushSyncTimer = null;
+var pullInFlight = false;
+var pushInFlight = false;
+var pushQueued = false;
+var remotePollTimer = null;
+var localLastChangedAt = 0;
+var lastSyncedSectionsStr = null;
+var lastSyncedLibraryStr = null;
 
 function loadData(){
   // Render immediately with defaults (or localStorage fallback)
   try{var r=localStorage.getItem(LOCAL_KEY);if(r){var d=JSON.parse(r);if(isUsable(d))DATA=d;}}catch(e){}
   try{var lr=localStorage.getItem(LIB_KEY);if(lr){var ld=JSON.parse(lr);if(Array.isArray(ld))DOCLIB=ld;}}catch(e){}
+  lastSyncedSectionsStr = JSON.stringify(DATA);
+  lastSyncedLibraryStr = JSON.stringify(DOCLIB);
   renderIntake();
   // Then silently try SharePoint in background
   loadFromSharePoint().then(function(result){
     var changed=false;
     if(result.sections&&isUsable(result.sections)){DATA=result.sections;try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}changed=true;}
-    if(result.library&&Array.isArray(result.library)){DOCLIB=result.library;changed=true;}
+    if(result.library&&Array.isArray(result.library)){DOCLIB=result.library;try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}changed=true;}
+    lastSyncedSectionsStr = JSON.stringify(DATA);
+    lastSyncedLibraryStr = JSON.stringify(DOCLIB);
     spLoaded=true;
     if(changed)renderIntake();
     showSpStatus(true);
+    startSharePointPolling();
   }).catch(function(err){
     console.warn('SharePoint offline:',err);
     spLoaded=false;
     showSpStatus(false);
+    startSharePointPolling();
   });
 }
 
@@ -676,6 +690,8 @@ var saveLibTimer=null;
 function saveData(){
   // Immediate localStorage write so nothing is lost
   try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
+  localLastChangedAt=Date.now();
+  scheduleSharePointPush();
   // Debounce toast to 30 seconds to avoid constant interruptions
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
@@ -685,6 +701,8 @@ function saveData(){
 function saveLib(){
   // For library: write immediately to localStorage
   try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
+  localLastChangedAt=Date.now();
+  scheduleSharePointPush();
   // Debounce toast — don't show every keystroke
   clearTimeout(saveLibTimer);
   saveLibTimer=setTimeout(function(){
@@ -692,47 +710,81 @@ function saveLib(){
   }, 30000);
 }
 
-function publishToFile(){
-  // Try fetch first (works when served over http/https)
-  // Falls back to XMLHttpRequest for file:// protocol
-  var xhr=new XMLHttpRequest();
-  xhr.open('GET',location.href,true);
-  xhr.onload=function(){if(xhr.status===200||xhr.status===0){_doPublish(xhr.responseText);}else{showToast('Publish failed - try Export backup instead');}};
-  xhr.onerror=function(){showToast('Publish failed - try Export backup instead');};
-  try{xhr.send();}catch(e){showToast('Publish failed - try Export backup instead');}
+function scheduleSharePointPush(){
+  clearTimeout(pushSyncTimer);
+  pushSyncTimer=setTimeout(function(){
+    if(pushInFlight){pushQueued=true;return;}
+    var sectionsStr=JSON.stringify(DATA);
+    var libraryStr=JSON.stringify(DOCLIB);
+    if(sectionsStr===lastSyncedSectionsStr&&libraryStr===lastSyncedLibraryStr) return;
+    pushInFlight=true;
+    Promise.all([saveToSharePoint('sections',sectionsStr),saveToSharePoint('library',libraryStr)])
+      .then(function(responses){
+        if(!responses[0].ok||!responses[1].ok) throw new Error('Graph write failed');
+        lastSyncedSectionsStr=sectionsStr;
+        lastSyncedLibraryStr=libraryStr;
+        spLoaded=true;
+        showSpStatus(true);
+      })
+      .catch(function(err){
+        console.warn('SharePoint save failed:',err);
+        spLoaded=false;
+        showSpStatus(false);
+      })
+      .finally(function(){
+        pushInFlight=false;
+        if(pushQueued){
+          pushQueued=false;
+          scheduleSharePointPush();
+        }
+      });
+  },SHAREPOINT_PUSH_DEBOUNCE_MS);
 }
 
-function _doPublish(fullHtml){
+function hasPendingLocalChanges(){
+  return JSON.stringify(DATA)!==lastSyncedSectionsStr||JSON.stringify(DOCLIB)!==lastSyncedLibraryStr;
+}
 
-  // Bake DEFAULT_DATA
-  var dataMarker='var DEFAULT_DATA=';
-  var localKeyMarker='var LOCAL_KEY=';
-  var dataStart=fullHtml.indexOf(dataMarker);
-  var dataEnd=fullHtml.indexOf(localKeyMarker,dataStart);
-  if(dataStart>0&&dataEnd>0){
-    fullHtml=fullHtml.substring(0,dataStart)+'var DEFAULT_DATA='+JSON.stringify(DATA)+';'+fullHtml.substring(dataEnd);
-  }
-
-  // Bake DEFAULT_LIB
-  var libMarker='var DEFAULT_LIB=';
-  var libStart=fullHtml.indexOf(libMarker);
-  var libEnd=fullHtml.indexOf('var DEFAULT_DATA=',libStart);
-  if(libStart>0&&libEnd>0){
-    fullHtml=fullHtml.substring(0,libStart)+'var DEFAULT_LIB='+JSON.stringify(DOCLIB)+';'+fullHtml.substring(libEnd);
-  }
-
-  // Bake password hash so it carries over to the new file
-  var pwHash=localStorage.getItem('intake_pw_v1');
-  if(pwHash){
-    var seedScript='<scr'+'ipt>try{if(!localStorage.getItem("intake_pw_v1"))localStorage.setItem("intake_pw_v1","'+pwHash+'");}catch(e){}<'+'/scr'+'ipt>';
-    fullHtml=fullHtml.replace('</head>',seedScript+'</head>');
-  }
-
-  // Source HTML already has correct initial state
-
-  var blob=new Blob([fullHtml],{type:'text/html'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='HR Immigration - email template builder.html';a.click();
-  showToast('Published! Replace the file on your shared folder.');
+function startSharePointPolling(){
+  if(remotePollTimer) return;
+  remotePollTimer=setInterval(function(){
+    if(pullInFlight||pushInFlight) return;
+    pullInFlight=true;
+    loadFromSharePoint().then(function(result){
+      spLoaded=true;
+      showSpStatus(true);
+      var now=Date.now();
+      var changed=false;
+      if(result.sections&&isUsable(result.sections)){
+        var remoteSectionsStr=JSON.stringify(result.sections);
+        if(remoteSectionsStr!==lastSyncedSectionsStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
+          DATA=result.sections;
+          try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
+          lastSyncedSectionsStr=remoteSectionsStr;
+          changed=true;
+        }
+      }
+      if(result.library&&Array.isArray(result.library)){
+        var remoteLibraryStr=JSON.stringify(result.library);
+        if(remoteLibraryStr!==lastSyncedLibraryStr&&now-localLastChangedAt>REMOTE_APPLY_GRACE_MS&&!hasPendingLocalChanges()){
+          DOCLIB=result.library;
+          try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
+          lastSyncedLibraryStr=remoteLibraryStr;
+          changed=true;
+        }
+      }
+      if(changed){
+        renderIntake();
+        if(document.getElementById('page-editor').classList.contains('active')) renderEditor();
+      }
+    }).catch(function(err){
+      console.warn('SharePoint poll failed:',err);
+      spLoaded=false;
+      showSpStatus(false);
+    }).finally(function(){
+      pullInFlight=false;
+    });
+  },SHAREPOINT_POLL_MS);
 }
 
 
