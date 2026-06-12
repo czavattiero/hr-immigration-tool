@@ -712,7 +712,7 @@ function saveLib(){
 function scheduleSharePointPush(){
   clearTimeout(pushSyncTimer);
   pushSyncTimer=setTimeout(function(){
-    if(pushInFlight) return;
+    if(pushInFlight){scheduleSharePointPush();return;}
     var sectionsStr=JSON.stringify(DATA);
     var libraryStr=JSON.stringify(DOCLIB);
     if(sectionsStr===lastSyncedSectionsStr&&libraryStr===lastSyncedLibraryStr) return;
