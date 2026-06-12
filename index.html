@@ -368,7 +368,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   <div class="modal" style="max-width:500px">
     <div class="modal-icon">&#9729;&#65039;</div>
     <h2>Supabase Connection</h2>
-    <p>Enter your Supabase project REST URL and anon key. Find both in your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener" style="color:var(--red)">Supabase dashboard</a> under Settings &rarr; API.</p>
+    <p>Enter your Supabase project REST URL and anon key. Find both in your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener" style="color:var(--red)">Supabase dashboard &#x2197;</a> under Settings &rarr; API.</p>
     <div class="modal-section">
       <span class="modal-section-label">Project URL (REST v1)</span>
       <input class="modal-input" type="text" id="sb-url-input" placeholder="https://xxxxxxxxxxxx.supabase.co/rest/v1" autocomplete="off" spellcheck="false">
@@ -803,7 +803,7 @@ function saveSupabaseSettings(){
   var e=document.getElementById('sb-error');
   if(!url||!key){e.textContent='Both URL and key are required.';return;}
   if(!url.startsWith('https://')){e.textContent='URL must start with https://';return;}
-  if(!key.startsWith('eyJ')){e.textContent='Key must be a valid JWT (starts with eyJ)';return;}
+  if(!key.startsWith('eyJ')||key.split('.').length!==3){e.textContent='Key must be a valid JWT token (three parts separated by dots)';return;}
   localStorage.setItem('supabase_url',url);
   localStorage.setItem('supabase_key',key);
   SUPABASE_URL=url;
@@ -828,7 +828,7 @@ function saveSupabaseSettings(){
   }).catch(function(err){
     spLoaded=false;
     showSpStatus(false,err&&err.message?err.message:'');
-    showToast('Connection failed — check credentials');
+    showToast('Connection failed — reopen Configure Supabase to verify credentials');
     startSharePointPolling();
   });
 }
