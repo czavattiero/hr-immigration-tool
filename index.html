@@ -363,6 +363,27 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   </div>
 </div>
 
+<!-- SUPABASE SETTINGS MODAL -->
+<div class="modal-overlay hidden" id="sb-settings-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-icon">&#9729;&#65039;</div>
+    <h2>Supabase Connection</h2>
+    <p>Enter your Supabase project REST URL and anon key. Find both in your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener" style="color:var(--red)">Supabase dashboard &#x2197;</a> under Settings &rarr; API.</p>
+    <div class="modal-section">
+      <span class="modal-section-label">Project URL (REST v1)</span>
+      <input class="modal-input" type="text" id="sb-url-input" placeholder="https://xxxxxxxxxxxx.supabase.co/rest/v1" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="modal-section">
+      <span class="modal-section-label">Anon / Public Key</span>
+      <input class="modal-input" type="text" id="sb-key-input" placeholder="eyJhbGci..." autocomplete="off" spellcheck="false" style="word-break:break-all;font-size:12px">
+    </div>
+    <div class="modal-error" id="sb-error"></div>
+    <button class="modal-submit" onclick="saveSupabaseSettings()">Save &amp; Reconnect</button>
+    <button class="modal-cancel" onclick="resetSupabaseSettings()" style="margin-top:8px">Reset to defaults</button>
+    <button class="modal-cancel" onclick="document.getElementById('sb-settings-modal').classList.add('hidden')">Cancel</button>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-logo-bg">
@@ -427,6 +448,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
         <label class="btn btn-secondary btn-sm" style="cursor:pointer">Import backup<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         <button class="btn btn-secondary btn-sm" onclick="resetToDefaults()">Reset to defaults</button>
         <button class="btn btn-secondary btn-sm" onclick="forcePush()" title="Force push all data to Supabase now">&#8593; Sync now</button>
+        <button class="btn btn-secondary btn-sm" onclick="openSupabaseSettings()" title="Configure Supabase URL and API key">&#9881;&#65039; Configure Supabase</button>
       </div>
     </div>
     <div class="type-legend">
@@ -488,8 +510,10 @@ function openChangePw(){['chpw-current','chpw-new','chpw-confirm'].forEach(funct
 function submitChangePw(){var cur=document.getElementById('chpw-current').value,np=document.getElementById('chpw-new').value,nc=document.getElementById('chpw-confirm').value,e=document.getElementById('chpw-error');checkPw(cur).then(function(ok){if(!ok){e.textContent='Current password is incorrect.';return;}if(np.length<4){e.textContent='New password must be at least 4 characters.';return;}if(np!==nc){e.textContent='Passwords do not match.';return;}setPw(np).then(function(){document.getElementById('chpw-modal').classList.add('hidden');showToast('Password changed');});});}
 
 /* ===== SUPABASE CONFIG ===== */
-var SUPABASE_URL   = 'https://lhmuliqpzuaktdffpecy.supabase.co/rest/v1';
-var SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxobXVsaXFwenVha3RkZmZwZWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MTIyNTAsImV4cCI6MjA5NDM4ODUwM30.TjxuONFAYRavL7KqVXmYkjg9KtpFhpjqvWkfXjx1fOE';
+var SUPABASE_URL_DEFAULT = 'https://lhmuliqpzuaktdffpecy.supabase.co/rest/v1';
+var SUPABASE_KEY_DEFAULT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxobXVsaXFwenVha3RkZmZwZWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MTIyNTAsImV4cCI6MjA5NDM4ODUwM30.TjxuONFAYRavL7KqVXmYkjg9KtpFhpjqvWkfXjx1fOE';
+var SUPABASE_URL   = localStorage.getItem('supabase_url') || SUPABASE_URL_DEFAULT;
+var SUPABASE_KEY   = localStorage.getItem('supabase_key') || SUPABASE_KEY_DEFAULT;
 var SUPABASE_TABLE = 'hr_tool_data';
 
 /* ===== SUPABASE API ===== */
@@ -634,8 +658,10 @@ function showSpStatus(online,detail){
   } else {
     var hint='';
     if(detail){
+      // 401 = JWT verification failed — invalid or rotated API key
+      if(detail.indexOf('401')!==-1) hint=' (invalid API key \u2014 <a href="#" onclick="openSupabaseSettings();return false;" style="color:inherit">update credentials</a>)';
       // 42501 = PostgreSQL insufficient_privilege (RLS blocking write)
-      if(detail.indexOf('42501')!==-1||detail.indexOf('403')!==-1) hint=' (permission denied \u2014 run supabase-setup.sql)';
+      else if(detail.indexOf('42501')!==-1||detail.indexOf('403')!==-1) hint=' (permission denied \u2014 run supabase-setup.sql)';
       // 42P01 = PostgreSQL undefined_table (table does not exist)
       else if(detail.indexOf('42P01')!==-1||detail.indexOf('404')!==-1) hint=' (table missing \u2014 run supabase-setup.sql)';
       // 400 or unique constraint missing = schema not set up for upsert
@@ -753,6 +779,58 @@ function forcePush(){
       showToast('Sync failed \u2014 see status bar');
     })
     .finally(function(){pushInFlight=false;});
+}
+
+function openSupabaseSettings(){
+  document.getElementById('sb-url-input').value=SUPABASE_URL;
+  document.getElementById('sb-key-input').value=SUPABASE_KEY;
+  document.getElementById('sb-error').textContent='';
+  document.getElementById('sb-settings-modal').classList.remove('hidden');
+  setTimeout(function(){document.getElementById('sb-url-input').focus();},50);
+}
+function resetSupabaseSettings(){
+  SUPABASE_URL=SUPABASE_URL_DEFAULT;
+  SUPABASE_KEY=SUPABASE_KEY_DEFAULT;
+  localStorage.removeItem('supabase_url');
+  localStorage.removeItem('supabase_key');
+  document.getElementById('sb-url-input').value=SUPABASE_URL;
+  document.getElementById('sb-key-input').value=SUPABASE_KEY;
+  document.getElementById('sb-error').textContent='Reset to defaults. Click Save & Reconnect to apply.';
+}
+function saveSupabaseSettings(){
+  var url=document.getElementById('sb-url-input').value.trim();
+  var key=document.getElementById('sb-key-input').value.trim();
+  var e=document.getElementById('sb-error');
+  if(!url||!key){e.textContent='Both URL and key are required.';return;}
+  if(!url.startsWith('https://')){e.textContent='URL must start with https://';return;}
+  if(!key.startsWith('eyJ')||key.split('.').length!==3){e.textContent='Key must be a valid JWT token (three parts separated by dots)';return;}
+  localStorage.setItem('supabase_url',url);
+  localStorage.setItem('supabase_key',key);
+  SUPABASE_URL=url;
+  SUPABASE_KEY=key;
+  document.getElementById('sb-settings-modal').classList.add('hidden');
+  spLoaded=false;
+  lastSyncedSectionsStr=null;
+  lastSyncedLibraryStr=null;
+  if(remotePollTimer){clearInterval(remotePollTimer);remotePollTimer=null;}
+  showToast('Reconnecting to Supabase…');
+  loadFromSupabase().then(function(result){
+    var changed=false;
+    if(result.sections&&isUsable(result.sections)){DATA=result.sections;try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(ex){}changed=true;}
+    if(result.library&&Array.isArray(result.library)){DOCLIB=result.library;try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(ex){}changed=true;}
+    lastSyncedSectionsStr=result.sectionsRaw||JSON.stringify(DATA);
+    lastSyncedLibraryStr=result.libraryRaw||JSON.stringify(DOCLIB);
+    spLoaded=true;
+    showSpStatus(true);
+    startSharePointPolling();
+    if(changed)renderIntake();
+    showToast('Connected ✓');
+  }).catch(function(err){
+    spLoaded=false;
+    showSpStatus(false,err&&err.message?err.message:'');
+    showToast('Connection failed — reopen Configure Supabase to verify credentials');
+    startSharePointPolling();
+  });
 }
 
 function startSharePointPolling(){
