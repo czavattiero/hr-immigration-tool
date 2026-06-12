@@ -641,6 +641,7 @@ var spLoaded = false;
 function loadData(){
   // Render immediately with defaults (or localStorage fallback)
   try{var r=localStorage.getItem(LOCAL_KEY);if(r){var d=JSON.parse(r);if(isUsable(d))DATA=d;}}catch(e){}
+  try{var lr=localStorage.getItem(LIB_KEY);if(lr){var ld=JSON.parse(lr);if(Array.isArray(ld))DOCLIB=ld;}}catch(e){}
   renderIntake();
   // Then silently try SharePoint in background
   loadFromSharePoint().then(function(result){
