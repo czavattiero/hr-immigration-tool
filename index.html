@@ -622,6 +622,7 @@ function saveData(){
   try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
   localLastChangedAt=Date.now();
   scheduleSupabasePush();
+  // Debounce toast to 30 seconds to avoid constant interruptions
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     showToast('Changes saved');
