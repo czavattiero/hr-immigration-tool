@@ -504,14 +504,14 @@ function loadFromSupabase(){
         sectionsRaw=si.content;
         try{
           var parsedSections=JSON.parse(si.content);
-          sections=parsedSections&&typeof parsedSections==='object'&&parsedSections.data!==undefined?parsedSections.data:parsedSections;
+          sections=parsedSections&&typeof parsedSections==='object'&&('data' in parsedSections)?parsedSections.data:parsedSections;
         }catch(e){}
       }
       if(li&&li.content){
         libraryRaw=li.content;
         try{
           var parsedLibrary=JSON.parse(li.content);
-          library=parsedLibrary&&typeof parsedLibrary==='object'&&parsedLibrary.data!==undefined?parsedLibrary.data:parsedLibrary;
+          library=parsedLibrary&&typeof parsedLibrary==='object'&&('data' in parsedLibrary)?parsedLibrary.data:parsedLibrary;
         }catch(e){}
       }
       return {sections:sections,library:library,sectionsRaw:sectionsRaw,libraryRaw:libraryRaw};
@@ -688,7 +688,7 @@ function hasPendingLocalChanges(){
   if(syncedSections){
     try{
       var parsedSections = JSON.parse(syncedSections);
-      syncedSections = parsedSections&&typeof parsedSections==='object'&&parsedSections.data!==undefined
+      syncedSections = parsedSections&&typeof parsedSections==='object'&&('data' in parsedSections)
         ? JSON.stringify(parsedSections.data)
         : JSON.stringify(parsedSections);
     }catch(e){}
@@ -696,7 +696,7 @@ function hasPendingLocalChanges(){
   if(syncedLibrary){
     try{
       var parsedLibrary = JSON.parse(syncedLibrary);
-      syncedLibrary = parsedLibrary&&typeof parsedLibrary==='object'&&parsedLibrary.data!==undefined
+      syncedLibrary = parsedLibrary&&typeof parsedLibrary==='object'&&('data' in parsedLibrary)
         ? JSON.stringify(parsedLibrary.data)
         : JSON.stringify(parsedLibrary);
     }catch(e){}
