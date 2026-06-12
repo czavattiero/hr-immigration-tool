@@ -327,7 +327,6 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-size:13.5px;padding:11px 22px;border-radius:99px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 </head>
 <body>
 
@@ -420,7 +419,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   <div class="wide-wrap">
     <div class="editor-top">
       <div>
-        <div class="save-note">All changes auto-save and sync across editors through SharePoint. Keep this page open to receive live updates.</div>
+        <div class="save-note">All changes auto-save and sync across editors. Keep this page open to receive live updates.</div>
       </div>
       <div class="editor-actions">
         <button class="btn btn-secondary btn-sm" onclick="openChangePw()">Change password</button>
@@ -487,108 +486,39 @@ function lockEditor(){editorUnlocked=false;document.getElementById('tab-lock-ico
 function openChangePw(){['chpw-current','chpw-new','chpw-confirm'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('chpw-error').textContent='';document.getElementById('chpw-modal').classList.remove('hidden');setTimeout(function(){document.getElementById('chpw-current').focus();},50);}
 function submitChangePw(){var cur=document.getElementById('chpw-current').value,np=document.getElementById('chpw-new').value,nc=document.getElementById('chpw-confirm').value,e=document.getElementById('chpw-error');checkPw(cur).then(function(ok){if(!ok){e.textContent='Current password is incorrect.';return;}if(np.length<4){e.textContent='New password must be at least 4 characters.';return;}if(np!==nc){e.textContent='Passwords do not match.';return;}setPw(np).then(function(){document.getElementById('chpw-modal').classList.add('hidden');showToast('Password changed');});});}
 
-/* ===== SHAREPOINT / GRAPH CONFIG ===== */
-var SP_SITE    = 'https://uofc.sharepoint.com/sites/spo-dept-lr-talent-immigrserv';
-var SP_LIST    = 'IntakeToolData';
-var TENANT     = 'uofc.onmicrosoft.com';
-var GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
-var SITE_PATH  = '/sites/uofc.sharepoint.com:/sites/spo-dept-lr-talent-immigrserv';
+/* ===== SUPABASE CONFIG ===== */
+var SUPABASE_URL   = 'https://lhmuliqpzuaktdffpecy.supabase.co/rest/v1';
+var SUPABASE_KEY   = '******';
+var SUPABASE_TABLE = 'hr_tool_data';
 
-var msalConfig = {
-  auth: {
-    clientId: '57fb890c-0dab-4253-a5e0-7188c88b2bb3',
-    authority: 'https://login.microsoftonline.com/' + TENANT,
-    redirectUri: window.location.href.split('?')[0].split('#')[0]
-  },
-  cache: {cacheLocation:'sessionStorage', storeAuthStateInCookie:true}
-};
-var msalScopes   = ['https://graph.microsoft.com/Sites.ReadWrite.All'];
-var msalInstance = null;
-var graphToken   = null;
-var spSiteId     = null;
-var spListId     = null;
-
-/* ===== MSAL AUTH + GRAPH API ===== */
-function initMsal(){
-  if(msalInstance) return Promise.resolve(msalInstance);
-  try{
-    msalInstance = new msal.PublicClientApplication(msalConfig);
-    return msalInstance.initialize().then(function(){return msalInstance;});
-  }catch(e){return Promise.reject(new Error('MSAL not available: '+e.message));}
-}
-function getGraphToken(){
-  if(graphToken) return Promise.resolve(graphToken);
-  return initMsal().then(function(client){
-    var accounts=client.getAllAccounts();
-    var req={scopes:msalScopes, account:accounts[0]||null};
-    return client.acquireTokenSilent(req).catch(function(){
-      return client.acquireTokenPopup({scopes:msalScopes});
+/* ===== SUPABASE API ===== */
+function loadFromSupabase(){
+  var headers={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY};
+  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE+'?select=title,content',{headers:headers})
+    .then(function(r){if(!r.ok) throw new Error('Supabase read failed: '+r.status);return r.json();})
+    .then(function(rows){
+      var si=rows.find(function(r){return r.title==='sections';});
+      var li=rows.find(function(r){return r.title==='library';});
+      var sections=null,library=null;
+      if(si&&si.content){try{sections=JSON.parse(si.content);}catch(e){}}
+      if(li&&li.content){try{library=JSON.parse(li.content);}catch(e){}}
+      return {sections:sections,library:library};
     });
-  }).then(function(result){
-    graphToken=result.accessToken;
-    setTimeout(function(){graphToken=null;},50*60*1000);
-    return graphToken;
-  });
 }
-function getGraphIds(){
-  if(spSiteId&&spListId) return Promise.resolve({siteId:spSiteId,listId:spListId});
-  return getGraphToken().then(function(token){
-    return fetch(GRAPH_BASE+SITE_PATH,{headers:{'Authorization':'Bearer '+token}})
-      .then(function(r){return r.json();})
-      .then(function(site){
-        spSiteId=site.id;
-        return fetch(GRAPH_BASE+'/sites/'+spSiteId+"/lists?$filter=displayName eq '"+SP_LIST+"'",
-          {headers:{'Authorization':'Bearer '+token}});
-      }).then(function(r){return r.json();})
-      .then(function(lists){
-        if(!lists.value||!lists.value[0]) throw new Error('List not found');
-        spListId=lists.value[0].id;
-        return {siteId:spSiteId,listId:spListId};
-      });
-  });
-}
-function loadFromSharePoint(){
-  return getGraphToken().then(function(token){
-    return getGraphIds().then(function(ids){
-      return fetch(GRAPH_BASE+'/sites/'+ids.siteId+'/lists/'+ids.listId+'/items?$expand=fields($select=Title,Content)&$top=10',
-        {headers:{'Authorization':'Bearer '+token}});
-    });
+function saveToSupabase(title,jsonStr){
+  var headers={
+    'apikey':SUPABASE_KEY,
+    'Authorization':'Bearer '+SUPABASE_KEY,
+    'Content-Type':'application/json',
+    'Prefer':'resolution=merge-duplicates'
+  };
+  return fetch(SUPABASE_URL+'/'+SUPABASE_TABLE,{
+    method:'POST',
+    headers:headers,
+    body:JSON.stringify({title:title,content:jsonStr})
   }).then(function(r){
-    if(!r.ok) throw new Error('Graph read failed: '+r.status);
-    return r.json();
-  }).then(function(d){
-    var items=(d.value||[]).map(function(i){return i.fields||i;});
-    var si=items.find(function(i){return i.Title==='sections';});
-    var li=items.find(function(i){return i.Title==='library';});
-    var sections=null,library=null;
-    if(si&&si.Content){try{sections=JSON.parse(si.Content);}catch(e){}}
-    if(li&&li.Content){try{library=JSON.parse(li.Content);}catch(e){}}
-    return {sections:sections,library:library};
-  });
-}
-function saveToSharePoint(title,jsonStr){
-  return getGraphToken().then(function(token){
-    return getGraphIds().then(function(ids){
-      return fetch(GRAPH_BASE+'/sites/'+ids.siteId+'/lists/'+ids.listId+"/items?$expand=fields($select=id,Title)&$filter=fields/Title eq '"+title+"'",
-        {headers:{'Authorization':'Bearer '+token}})
-        .then(function(r){return r.json();})
-        .then(function(d){
-          var ex=d.value&&d.value.length>0?d.value[0]:null;
-          if(ex){
-            return fetch(GRAPH_BASE+'/sites/'+ids.siteId+'/lists/'+ids.listId+'/items/'+ex.id+'/fields',{
-              method:'PATCH',
-              headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-              body:JSON.stringify({Title:title,Content:jsonStr})
-            });
-          } else {
-            return fetch(GRAPH_BASE+'/sites/'+ids.siteId+'/lists/'+ids.listId+'/items',{
-              method:'POST',
-              headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-              body:JSON.stringify({fields:{Title:title,Content:jsonStr}})
-            });
-          }
-        });
-    });
+    if(!r.ok) throw new Error('Supabase write failed: '+r.status);
+    return r;
   });
 }
 
@@ -653,8 +583,8 @@ function loadData(){
   lastSyncedSectionsStr = JSON.stringify(DATA);
   lastSyncedLibraryStr = JSON.stringify(DOCLIB);
   renderIntake();
-  // Then silently try SharePoint in background
-  loadFromSharePoint().then(function(result){
+  // Then silently try Supabase in background
+  loadFromSupabase().then(function(result){
     var changed=false;
     if(result.sections&&isUsable(result.sections)){DATA=result.sections;try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}changed=true;}
     if(result.library&&Array.isArray(result.library)){DOCLIB=result.library;try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}changed=true;}
@@ -665,7 +595,7 @@ function loadData(){
     showSpStatus(true);
     startSharePointPolling();
   }).catch(function(err){
-    console.warn('SharePoint offline:',err);
+    console.warn('Supabase offline:',err);
     spLoaded=false;
     showSpStatus(false);
     startSharePointPolling();
@@ -674,7 +604,7 @@ function loadData(){
 
 function showSpStatus(online){
   var el=document.getElementById('sp-status');if(!el)return;
-  el.innerHTML=online?'&#9679; Connected to SharePoint':'&#9679; Offline — changes save locally only';
+  el.innerHTML=online?'&#9679; Connected':'&#9679; Offline — changes save locally only';
   el.style.color=online?'#2d7a2d':'#cc6600';
   el.style.display='block';
 }
@@ -691,8 +621,7 @@ function saveData(){
   // Immediate localStorage write so nothing is lost
   try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
   localLastChangedAt=Date.now();
-  scheduleSharePointPush();
-  // Debounce toast to 30 seconds to avoid constant interruptions
+  scheduleSupabasePush();
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     showToast('Changes saved');
@@ -702,7 +631,7 @@ function saveLib(){
   // For library: write immediately to localStorage
   try{localStorage.setItem(LIB_KEY,JSON.stringify(DOCLIB));}catch(e){}
   localLastChangedAt=Date.now();
-  scheduleSharePointPush();
+  scheduleSupabasePush();
   // Debounce toast — don't show every keystroke
   clearTimeout(saveLibTimer);
   saveLibTimer=setTimeout(function(){
@@ -710,7 +639,7 @@ function saveLib(){
   }, 30000);
 }
 
-function scheduleSharePointPush(){
+function scheduleSupabasePush(){
   clearTimeout(pushSyncTimer);
   pushSyncTimer=setTimeout(function(){
     if(pushInFlight){pushQueued=true;return;}
@@ -718,16 +647,15 @@ function scheduleSharePointPush(){
     var libraryStr=JSON.stringify(DOCLIB);
     if(sectionsStr===lastSyncedSectionsStr&&libraryStr===lastSyncedLibraryStr) return;
     pushInFlight=true;
-    Promise.all([saveToSharePoint('sections',sectionsStr),saveToSharePoint('library',libraryStr)])
-      .then(function(responses){
-        if(!responses[0].ok||!responses[1].ok) throw new Error('Graph write failed');
+    Promise.all([saveToSupabase('sections',sectionsStr),saveToSupabase('library',libraryStr)])
+      .then(function(){
         lastSyncedSectionsStr=sectionsStr;
         lastSyncedLibraryStr=libraryStr;
         spLoaded=true;
         showSpStatus(true);
       })
       .catch(function(err){
-        console.warn('SharePoint save failed:',err);
+        console.warn('Supabase save failed:',err);
         spLoaded=false;
         showSpStatus(false);
       })
@@ -735,7 +663,7 @@ function scheduleSharePointPush(){
         pushInFlight=false;
         if(pushQueued){
           pushQueued=false;
-          scheduleSharePointPush();
+          scheduleSupabasePush();
         }
       });
   },SHAREPOINT_PUSH_DEBOUNCE_MS);
@@ -750,7 +678,7 @@ function startSharePointPolling(){
   remotePollTimer=setInterval(function(){
     if(pullInFlight||pushInFlight) return;
     pullInFlight=true;
-    loadFromSharePoint().then(function(result){
+    loadFromSupabase().then(function(result){
       spLoaded=true;
       showSpStatus(true);
       var now=Date.now();
@@ -778,7 +706,7 @@ function startSharePointPolling(){
         if(document.getElementById('page-editor').classList.contains('active')) renderEditor();
       }
     }).catch(function(err){
-      console.warn('SharePoint poll failed:',err);
+      console.warn('Supabase poll failed:',err);
       spLoaded=false;
       showSpStatus(false);
     }).finally(function(){
