@@ -702,6 +702,7 @@ function scheduleSupabasePush(){
         spLoaded=false;
         showSpStatus(false,err&&err.message?err.message:'');
         // Schedule a retry so a transient failure does not permanently block sync.
+        // scheduleSupabasePush will no-op if hasPendingLocalChanges() is false by then.
         clearTimeout(pushRetryTimer);
         pushRetryTimer=setTimeout(function(){pushRetryTimer=null;scheduleSupabasePush();},PUSH_RETRY_MS);
       })
@@ -802,13 +803,6 @@ function doPoll(){
 function startSharePointPolling(){
   if(remotePollTimer) return;
   remotePollTimer=setInterval(doPoll,SHAREPOINT_POLL_MS);
-  // Pull immediately whenever the tab becomes visible again — browsers throttle
-  // setInterval for background tabs (Chrome: ≥1 min after 5 min backgrounded,
-  // Safari: even more aggressively), so without this users see stale data every
-  // time they switch back to the tab.
-  document.addEventListener('visibilitychange',function(){
-    if(!document.hidden) doPoll();
-  });
 }
 
 
@@ -1601,6 +1595,11 @@ document.addEventListener('input',function(e){
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
+// Pull immediately whenever the tab becomes visible again — browsers throttle
+// setInterval for background tabs (Chrome: ≥1 min after 5 min backgrounded,
+// Safari: more aggressively), so without this users see stale data every time
+// they switch back to the tab.
+document.addEventListener('visibilitychange',function(){if(!document.hidden)doPoll();});
 loadData();
 // Capture source AFTER full parse — script tag content is now in DOM
 var _originalSource = null;
