@@ -88,6 +88,7 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .manual-badge{font-size:10px;background:#E05000;color:#fff;border-radius:3px;padding:1px 5px;letter-spacing:.04em}
 .reminder-note{font-size:11.5px;color:#7a3500;margin-top:7px;padding:7px 10px;background:rgba(255,255,255,.6);border-radius:5px;border-left:3px solid #E05000;display:none}
 .reminder-note.visible{display:block}
+.docs-files-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
 
 .output-body{background:#fff;padding:0}
 .output-seg{padding:12px 22px}
@@ -450,15 +451,9 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
         <div class="docs-prompt-hdr">&#128206; Attach to this email before sending</div>
         <div class="docs-prompt-list" id="docs-prompt-list"></div>
         <div class="reminder-note" id="reminder-note">&#9888; Items marked MANUAL have no file path &mdash; locate and attach these documents yourself before sending.</div>
+        <div class="docs-files-list" id="docs-files-list"></div>
       </div>
       <div class="output-body" id="output-body"></div>
-    </div>
-    <div class="files-panel" id="files-panel">
-      <div class="files-panel-hdr">
-        <span style="font-size:18px">&#128206;</span>
-        <span class="files-panel-title">Files to attach to the email</span>
-      </div>
-      <div class="files-panel-body" id="files-panel-body"></div>
     </div>
     <button class="reset-btn" id="reset-btn" onclick="resetForm()" style="display:none">&#8634; Reset form</button>
   </div>
@@ -844,7 +839,7 @@ function htmlToText(h){var d=document.createElement('div');d.innerHTML=h;return(
 
 function renderOutput(){
   var os=document.getElementById('output-section'),ob=document.getElementById('output-body');
-  var fp=document.getElementById('files-panel'),fb=document.getElementById('files-panel-body');
+  var dfl=document.getElementById('docs-files-list');
   var rb=document.getElementById('reset-btn'),dp=document.getElementById('docs-prompt');
   var dl=document.getElementById('docs-prompt-list'),rn=document.getElementById('reminder-note');
   var active=DATA.filter(function(s){return s.type==='dynamic'||s.type==='grouped';});
@@ -853,7 +848,7 @@ function renderOutput(){
     return answers[s.id]!=null;
   }).length;
   var hasFixed=DATA.some(function(s){return s.type==='fixed'&&s.text&&htmlToText(s.text);});
-  if(ac===0&&!hasFixed){os.classList.remove('visible');fp.classList.remove('visible');rb.style.display='none';dp.classList.remove('visible');return;}
+  if(ac===0&&!hasFixed){os.classList.remove('visible');rb.style.display='none';dp.classList.remove('visible');return;}
 
   var segs=[],docs=[];
   DATA.forEach(function(s){
@@ -901,24 +896,25 @@ function renderOutput(){
       return '<span class="'+cls+'">'+icon+' '+esc(nm)+badge+'</span>';
     }).join('');
     if(rn) rn.className='reminder-note'+(hasRem?' visible':'');
-    fp.classList.add('visible');
-    fb.innerHTML=docs.map(function(d,i){
-      var nm=d.name||(d.path?d.path.replace(/[\\]/g,'/').split('/').pop():'Document');
-      var lk=nm.toLowerCase();
-      var icon=lk.indexOf('.pdf')>=0?'&#128196;':lk.indexOf('.doc')>=0?'&#128221;':'&#128206;';
-      if(d.reminder){return '<div class="file-card reminder-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name reminder-name">'+esc(nm)+'</div><div class="reminder-msg">&#9888; Locate and attach this document manually before sending.</div></div></div>';}
-      var ph=d.path?'<div class="file-card-path"><span class="file-card-path-label">File path</span><span class="file-card-path-value" id="fp-'+i+'">'+esc(d.path)+'</span><button class="copy-path-btn" data-target="fp-'+i+'">Copy path</button></div>':'';
-      var lh=d.url?'<div style="margin-top:6px"><a class="file-card-link" href="'+escA(d.url)+'" target="_blank" rel="noopener">Open / attach via Outlook</a></div>':'';
-      return '<div class="file-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name">'+esc(nm)+'</div>'+ph+lh+'</div></div>';
-    }).join('');
-    fb.querySelectorAll('.copy-path-btn').forEach(function(btn){
-      btn.addEventListener('click',function(){
-        var el=document.getElementById(btn.dataset.target);
-        if(!el) return;
-        navigator.clipboard.writeText(el.textContent).then(function(){var o=btn.textContent;btn.textContent='Copied!';setTimeout(function(){btn.textContent=o;},2000);});
+    if(dfl){
+      dfl.innerHTML=docs.map(function(d,i){
+        var nm=d.name||(d.path?d.path.replace(/[\\]/g,'/').split('/').pop():'Document');
+        var lk=nm.toLowerCase();
+        var icon=lk.indexOf('.pdf')>=0?'&#128196;':lk.indexOf('.doc')>=0?'&#128221;':'&#128206;';
+        if(d.reminder){return '<div class="file-card reminder-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name reminder-name">'+esc(nm)+'</div><div class="reminder-msg">&#9888; Locate and attach this document manually before sending.</div></div></div>';}
+        var ph=d.path?'<div class="file-card-path"><span class="file-card-path-label">File path</span><span class="file-card-path-value" id="fp-'+i+'">'+esc(d.path)+'</span><button class="copy-path-btn" data-target="fp-'+i+'">Copy path</button></div>':'';
+        var lh=d.url?'<div style="margin-top:6px"><a class="file-card-link" href="'+escA(d.url)+'" target="_blank" rel="noopener">Open / attach via Outlook</a></div>':'';
+        return '<div class="file-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name">'+esc(nm)+'</div>'+ph+lh+'</div></div>';
+      }).join('');
+      dfl.querySelectorAll('.copy-path-btn').forEach(function(btn){
+        btn.addEventListener('click',function(){
+          var el=document.getElementById(btn.dataset.target);
+          if(!el) return;
+          navigator.clipboard.writeText(el.textContent).then(function(){var o=btn.textContent;btn.textContent='Copied!';setTimeout(function(){btn.textContent=o;},2000);});
+        });
       });
-    });
-  } else {fp.classList.remove('visible');dp.classList.remove('visible');}
+    }
+  } else {dp.classList.remove('visible');}
 }
 
 function copyOutputText(){
