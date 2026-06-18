@@ -355,8 +355,9 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .add-item-out-btn{font-size:12.5px;font-family:"DM Sans",sans-serif;background:none;border:1.5px solid rgba(204,0,0,.3);border-radius:6px;padding:7px 12px;color:var(--red);cursor:pointer;white-space:nowrap}
 .add-item-out-btn:hover{border-color:var(--red);background:rgba(204,0,0,.04)}
 .item-out-row{background:var(--paper);border:1.5px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:10px}
-.item-out-row-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--paper2)}
-.item-out-row-name{font-size:13.5px;font-weight:500;color:var(--ink)}
+.item-out-row-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--paper2);flex-wrap:wrap;gap:6px}
+.item-out-row-name{font-size:13.5px;font-weight:500;color:var(--ink);display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.item-name-chip{display:inline-block;background:var(--paper2);border:1px solid var(--border2);border-radius:4px;padding:1px 7px;font-size:12px;margin:1px 2px}
 .item-out-row-body{padding:12px;background:#fff;border-top:1px solid var(--border)}
 .del-item-out-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:18px;padding:2px 6px;line-height:1}
 .del-item-out-btn:hover{color:var(--danger)}
@@ -826,7 +827,7 @@ function renderOutput(){
         var key=s.id+'__'+gdi;
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
-        var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});
+        var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
         var outHtml=io?io.text:(gd.output||'');
         var outDocs=io?(io.docs||[]):(gd.docs||[]);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
@@ -878,7 +879,7 @@ function copyOutputText(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(htmlToText(s.text));}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(htmlToText(o.output));}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});var t=io?io.text:(gd.output||'');if(t) parts.push(htmlToText(t));});}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var t=io?io.text:(gd.output||'');if(t) parts.push(htmlToText(t));});}
   });
   navigator.clipboard.writeText(parts.join('\n\n')).then(function(){var b=document.getElementById('copy-text-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy plain text';},2000);});
 }
@@ -887,7 +888,7 @@ function copyOutputHTML(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(s.text);}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(o.output);}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});var h=io?io.text:(gd.output||'');if(h) parts.push(h);});}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=io?io.text:(gd.output||'');if(h) parts.push(h);});}
   });
   var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
@@ -1077,12 +1078,12 @@ function buildGroupBlock(sid,gi,g){
 
 function buildItemOutputRow(sid,gdi,ioi,io){
   var rteId='gio-'+sid+'-'+gdi+'-'+ioi;
-  var itemArr=Array.isArray(io.items)?io.items:(io.item?[io.item]:[]);
-  var namesDisplay=itemArr.map(function(n){return '<span style="display:inline-block;background:var(--paper2);border:1px solid var(--border2);border-radius:4px;padding:1px 7px;font-size:12px;margin:1px 2px">'+esc(n)+'</span>';}).join('');
+  var itemArr=getItemArr(io);
+  var namesDisplay=itemArr.map(function(n){return '<span class="item-name-chip">'+esc(n)+'</span>';}).join('');
   var namesLabel=itemArr.join(', ');
   return '<div class="item-out-row" id="iorow-'+sid+'-'+gdi+'-'+ioi+'">'
-    +'<div class="item-out-row-hdr" style="flex-wrap:wrap;gap:6px">'
-    +'<span class="item-out-row-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">&#127758; '+namesDisplay+'</span>'
+    +'<div class="item-out-row-hdr">'
+    +'<span class="item-out-row-name">&#127758; '+namesDisplay+'</span>'
     +'<button class="del-item-out-btn" data-action="delItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'" data-ioi="'+ioi+'">&times;</button>'
     +'</div>'
     +'<div class="item-out-row-body">'
@@ -1454,6 +1455,8 @@ function setCondOpt(sid,ci,optIdx){
   saveData();
 }
 
+function getItemArr(io){return Array.isArray(io.items)?io.items:(io.item?[io.item]:[]);}
+
 function parseItemOutputInput(raw){
   var seen={};
   return String(raw||'').split(/[\n,;]+/).map(function(x){return x.trim();}).filter(function(x){
@@ -1476,7 +1479,7 @@ function addItemOutput(sid,gdi){
   /* build a set of all items already covered by existing output groups */
   var existing={};
   gd.itemOutputs.forEach(function(x){
-    var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);
+    var arr=getItemArr(x);
     arr.forEach(function(n){existing[String(n).trim().toLowerCase()]=true;});
   });
   var newItems=[],skipped=0;
