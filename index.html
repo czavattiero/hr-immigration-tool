@@ -736,19 +736,32 @@ function renderIntake(){
   active.forEach(function(s){
     var hasQ=s.type==='grouped'?true:(s.question&&s.question.trim());
     var hasOpts=(s.type==='dynamic'&&s.options&&s.options.some(function(o){return o.label&&o.label.trim();}))
-              ||(s.type==='grouped'&&s.dropdowns&&s.dropdowns.some(function(gd){return gd.items&&gd.items.some(function(n){return n&&n.trim();});}));
+              ||(s.type==='grouped'&&s.dropdowns&&s.dropdowns.some(function(gd){
+                  return (gd.items&&gd.items.some(function(n){return n&&n.trim();}))
+                      ||(gd.itemOutputs&&gd.itemOutputs.some(function(io){return getItemArr(io).some(function(n){return n&&n.trim();});}));
+                }));
     if(hasQ&&hasOpts&&conditionsMet(s)) visible.push(s);
   });
   visible.forEach(function(s,idx){
     var card=document.createElement('div');
-    card.className='question-card'+(answers[s.id]!=null?' answered':'');
+    var grpAnswered=s.type==='grouped'&&(s.dropdowns||[]).some(function(gd,gdi){return answers[s.id+'__'+gdi]!=null;});
+    card.className='question-card'+((answers[s.id]!=null||grpAnswered)?' answered':'');
     var selCls='q-select'+(answers[s.id]!=null?' selected':'');
 
     if(s.type==='grouped'){
       /* Multiple dropdowns - render each as its own select */
       var dropsHtml='';
       (s.dropdowns||[]).forEach(function(gd,gdi){
-        var names=(gd.items||[]).filter(function(n){return n&&n.trim();}).slice().sort(function(a,b){return a.localeCompare(b);});
+        var ioItems=[];
+        (gd.itemOutputs||[]).forEach(function(io){getItemArr(io).forEach(function(n){if(n&&n.trim())ioItems.push(n);});});
+        var seen={};
+        var names=(gd.items||[]).concat(ioItems).filter(function(n){
+          if(!n||!n.trim())return false;
+          var k=n.trim().toLowerCase();
+          if(seen[k])return false;
+          seen[k]=true;
+          return true;
+        }).slice().sort(function(a,b){return a.localeCompare(b);});
         var key=s.id+'__'+gdi;
         var selCls2='q-select'+(answers[key]!=null?' selected':'');
         var optsHtml='<option value="">-- Select an answer --</option>';
@@ -807,7 +820,10 @@ function renderOutput(){
   var rb=document.getElementById('reset-btn'),dp=document.getElementById('docs-prompt');
   var dl=document.getElementById('docs-prompt-list'),rn=document.getElementById('reminder-note');
   var active=DATA.filter(function(s){return s.type==='dynamic'||s.type==='grouped';});
-  var ac=active.filter(function(s){return answers[s.id]!=null;}).length;
+  var ac=active.filter(function(s){
+    if(s.type==='grouped') return (s.dropdowns||[]).some(function(gd,gdi){return answers[s.id+'__'+gdi]!=null;});
+    return answers[s.id]!=null;
+  }).length;
   var hasFixed=DATA.some(function(s){return s.type==='fixed'&&s.text&&htmlToText(s.text);});
   if(ac===0&&!hasFixed){os.classList.remove('visible');fp.classList.remove('visible');rb.style.display='none';dp.classList.remove('visible');return;}
 
