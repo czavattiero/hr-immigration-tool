@@ -736,10 +736,7 @@ function renderIntake(){
   active.forEach(function(s){
     var hasQ=s.type==='grouped'?true:(s.question&&s.question.trim());
     var hasOpts=(s.type==='dynamic'&&s.options&&s.options.some(function(o){return o.label&&o.label.trim();}))
-              ||(s.type==='grouped'&&s.dropdowns&&s.dropdowns.some(function(gd){
-                  return (gd.items&&gd.items.some(function(n){return n&&n.trim();}))
-                      ||(gd.itemOutputs&&gd.itemOutputs.some(function(io){return getItemArr(io).some(function(n){return n&&n.trim();});}));
-                }));
+              ||(s.type==='grouped'&&s.dropdowns&&s.dropdowns.some(function(gd){return getDropdownNames(gd).length>0;}));
     if(hasQ&&hasOpts&&conditionsMet(s)) visible.push(s);
   });
   visible.forEach(function(s,idx){
@@ -752,16 +749,7 @@ function renderIntake(){
       /* Multiple dropdowns - render each as its own select */
       var dropsHtml='';
       (s.dropdowns||[]).forEach(function(gd,gdi){
-        var ioItems=[];
-        (gd.itemOutputs||[]).forEach(function(io){getItemArr(io).forEach(function(n){if(n&&n.trim())ioItems.push(n);});});
-        var seen={};
-        var names=(gd.items||[]).concat(ioItems).filter(function(n){
-          if(!n||!n.trim())return false;
-          var k=n.trim().toLowerCase();
-          if(seen[k])return false;
-          seen[k]=true;
-          return true;
-        }).slice().sort(function(a,b){return a.localeCompare(b);});
+        var names=getDropdownNames(gd);
         var key=s.id+'__'+gdi;
         var selCls2='q-select'+(answers[key]!=null?' selected':'');
         var optsHtml='<option value="">-- Select an answer --</option>';
@@ -1472,6 +1460,23 @@ function setCondOpt(sid,ci,optIdx){
 }
 
 function getItemArr(io){return Array.isArray(io.items)?io.items:(io.item?[io.item]:[]);}
+
+/* Returns deduplicated, sorted list of all selectable names for a grouped dropdown row.
+   Combines gd.items (typed in the textarea) with any item names defined in gd.itemOutputs. */
+function getDropdownNames(gd){
+  var seen={};
+  var combined=(gd.items||[]).slice();
+  (gd.itemOutputs||[]).forEach(function(io){
+    getItemArr(io).forEach(function(n){combined.push(n);});
+  });
+  return combined.filter(function(n){
+    if(!n||!n.trim()) return false;
+    var k=n.trim().toLowerCase();
+    if(seen[k]) return false;
+    seen[k]=true;
+    return true;
+  }).sort(function(a,b){return a.localeCompare(b);});
+}
 
 function parseItemOutputInput(raw){
   var seen={};
