@@ -339,6 +339,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .condition-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--paper);border:1px solid var(--border);border-radius:7px;padding:10px 12px;flex-wrap:wrap}
 .condition-select{flex:1;min-width:120px;border:1.5px solid var(--border2);border-radius:6px;padding:7px 9px;font-family:"DM Sans",sans-serif;font-size:13px;color:var(--ink);background:#fff;outline:none}
 .condition-select:focus{border-color:var(--red)}
+.condition-select[multiple]{padding:4px 6px;min-height:72px;resize:vertical}
 .condition-label{font-size:12px;color:var(--ink3);white-space:nowrap}
 .add-cond-btn{font-size:12.5px;font-family:"DM Sans",sans-serif;background:none;border:1.5px dashed rgba(204,0,0,.3);border-radius:6px;padding:7px 14px;color:var(--red);cursor:pointer}
 .add-cond-btn:hover{border-color:var(--red);background:rgba(204,0,0,.04)}
@@ -714,7 +715,7 @@ function conditionsMet(s){
   return s.conditions.every(function(c){
     var ref=DATA.find(function(r){return r.id===c.sectionId;});
     if(!ref) return true;
-    if(ref.type==='dynamic') return answers[c.sectionId]===c.optionIndex;
+    if(ref.type==='dynamic'){var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;}
     if(ref.type==='grouped'&&c.gdi!=null) return answers[c.sectionId+'__'+c.gdi]===c.value;
     return true;
   });
@@ -842,7 +843,7 @@ function renderOutput(){
 
   os.classList.add('visible'); rb.style.display='block';
   var rem=active.length-ac;
-  var bodyHtml=segs.map(function(s){return '<div class="output-seg"><div class="seg-label '+s.type+'">'+esc(s.label)+'</div><div class="seg-text">'+s.html+'</div></div>';}).join('');
+  var bodyHtml=segs.map(function(s){return '<div class="output-seg"><div class="seg-text">'+s.html+'</div></div>';}).join('');
   if(rem>0) bodyHtml+='<div class="pending-note">'+rem+' question'+(rem>1?'s':'')+' still unanswered.</div>';
   ob.innerHTML=bodyHtml;
 
@@ -992,18 +993,20 @@ function buildConditionsUI(s){
   var rows=conds.map(function(c,ci){
     var secOpts=dynSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
     var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
-    var optOpts='<option value="">-- select answer --</option>';
-    if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(c.optionIndex===oi?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
+    var optOpts='';
+    var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
+    if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
+    var multiSize=refSec&&refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
     return '<div class="condition-row">'
       +'<span class="condition-label">If</span>'
       +'<select class="condition-select" data-action="setCondSec" data-sid="'+escA(s.id)+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
       +'<span class="condition-label">=</span>'
-      +'<select class="condition-select" data-action="setCondOpt" data-sid="'+escA(s.id)+'" data-ci="'+ci+'">'+optOpts+'</select>'
+      +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setCondOpt" data-sid="'+escA(s.id)+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>'
       +'<button class="del-cond-btn" data-action="delCondition" data-sid="'+escA(s.id)+'" data-ci="'+ci+'">&times;</button>'
       +'</div>';
   }).join('');
   return '<div class="conditions-section">'
-    +'<div class="conditions-hdr">&#128274; Visibility conditions <span style="font-weight:400;color:var(--ink3)">&mdash; show only when all conditions below are met (leave empty to always show)</span></div>'
+    +'<div class="conditions-hdr">&#128274; Visibility conditions <span style="font-weight:400;color:var(--ink3)">&mdash; show only when all conditions below are met (leave empty to always show). Hold Ctrl / ⌘ in the answer list to select multiple answers.</span></div>'
     +rows
     +'<button class="add-cond-btn" data-action="addCondition" data-sid="'+escA(s.id)+'">+ Add condition</button>'
     +'</div>';
@@ -1051,6 +1054,7 @@ function buildBlock(s,i){
     +'<span class="block-num">#'+(i+1)+' of '+DATA.length+'</span>'
     +'<button class="move-btn" data-action="moveSection" data-sid="'+escA(s.id)+'" data-dir="-1"'+(isFirst?' disabled':'')+'>&#8593;</button>'
     +'<button class="move-btn" data-action="moveSection" data-sid="'+escA(s.id)+'" data-dir="1"'+(isLast?' disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="dupSection" data-sid="'+escA(s.id)+'">Duplicate</button>'
     +'<button class="btn btn-danger btn-sm" data-action="delSection" data-sid="'+escA(s.id)+'">Delete</button>'
     +'<span class="block-accordion-arrow">&#9660;</span>'
     +'</div></div>'
@@ -1333,6 +1337,15 @@ function delSection(sid){
   if(!confirm('Delete this section?'))return;
   DATA=DATA.filter(function(s){return s.id!==sid;}); saveData(); renderEditor();
 }
+function duplicateSection(sid){
+  var s=DATA.find(function(s){return s.id===sid;}); if(!s) return;
+  var copy=JSON.parse(JSON.stringify(s));
+  copy.id='s'+Date.now();
+  var i=DATA.findIndex(function(s){return s.id===sid;});
+  DATA.splice(i+1,0,copy);
+  saveData(); renderEditor();
+  setTimeout(function(){var el=document.getElementById('block-'+copy.id);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});openAccordion(copy.id);}},150);
+}
 function moveSection(sid,dir){
   var i=DATA.findIndex(function(s){return s.id===sid;}),n=i+dir;
   if(n<0||n>=DATA.length) return;
@@ -1440,7 +1453,7 @@ function delGrpDrop(sid,gdi){
 function addCondition(sid){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s) return;
   s.conditions=s.conditions||[];
-  s.conditions.push({sectionId:'',optionIndex:null});
+  s.conditions.push({sectionId:'',optionIndices:[]});
   saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
 }
 function delCondition(sid,ci){
@@ -1450,12 +1463,14 @@ function delCondition(sid,ci){
 function setCondSec(sid,ci,refSid){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
   s.conditions[ci].sectionId=refSid;
-  s.conditions[ci].optionIndex=null;
+  s.conditions[ci].optionIndices=[];
+  delete s.conditions[ci].optionIndex;
   saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
 }
-function setCondOpt(sid,ci,optIdx){
+function setCondOpt(sid,ci,optIndices){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
-  s.conditions[ci].optionIndex=optIdx===''?null:parseInt(optIdx);
+  s.conditions[ci].optionIndices=Array.isArray(optIndices)?optIndices:[];
+  delete s.conditions[ci].optionIndex;
   saveData();
 }
 
@@ -1549,6 +1564,8 @@ document.addEventListener('click',function(e){
   if(mv){moveSection(mv.dataset.sid,parseInt(mv.dataset.dir));return;}
   var ds=e.target.closest('[data-action="delSection"]');
   if(ds){delSection(ds.dataset.sid);return;}
+  var dup=e.target.closest('[data-action="dupSection"]');
+  if(dup){duplicateSection(dup.dataset.sid);return;}
   var agd=e.target.closest('[data-action="addGrpDrop"]');
   if(agd){addGrpDrop(agd.dataset.sid);return;}
   var dgd=e.target.closest('[data-action="delGrpDrop"]');
@@ -1595,7 +1612,7 @@ document.addEventListener('change',function(e){
   var cs=e.target.closest('select[data-action="setCondSec"]');
   if(cs){setCondSec(cs.dataset.sid,parseInt(cs.dataset.ci),cs.value);return;}
   var co=e.target.closest('select[data-action="setCondOpt"]');
-  if(co){setCondOpt(co.dataset.sid,parseInt(co.dataset.ci),co.value);return;}
+  if(co){var selected=Array.prototype.filter.call(co.options,function(o){return o.selected;}).map(function(o){return parseInt(o.value);});setCondOpt(co.dataset.sid,parseInt(co.dataset.ci),selected);return;}
 });
 document.addEventListener('input',function(e){
   var fi=e.target.closest('input[data-action="upField"]');
