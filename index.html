@@ -885,7 +885,7 @@ function copyOutputHTML(){
   });
   var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
-  catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);}); }
+  catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
 function resetForm(){answers={};renderIntake();}
 
@@ -1483,7 +1483,6 @@ document.addEventListener('click',function(e){
   if(aio){addItemOutput(aio.dataset.sid,parseInt(aio.dataset.gdi));return;}
   var dio=e.target.closest('[data-action="delItemOutput"]');
   if(dio){delItemOutput(dio.dataset.sid,parseInt(dio.dataset.gdi),parseInt(dio.dataset.ioi));return;}
-  if(dl){delLibDoc(parseInt(dl.dataset.idx));return;}
   var cpf=e.target.closest('[data-action="copyPathField"]');
   if(cpf){
     var oiN=(cpf.dataset.oi!=='null')?parseInt(cpf.dataset.oi):null;
