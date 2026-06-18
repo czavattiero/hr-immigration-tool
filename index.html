@@ -341,6 +341,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .condition-select:focus{border-color:var(--red)}
 .condition-select[multiple]{padding:4px 6px;min-height:72px;resize:vertical}
 .condition-label{font-size:12px;color:var(--ink3);white-space:nowrap}
+.condition-and-label{font-size:11px;font-weight:700;color:var(--darkred);text-transform:uppercase;letter-spacing:.08em;padding:2px 0 2px 2px;opacity:.8}
 .add-cond-btn{font-size:12.5px;font-family:"DM Sans",sans-serif;background:none;border:1.5px dashed rgba(204,0,0,.3);border-radius:6px;padding:7px 14px;color:var(--red);cursor:pointer}
 .add-cond-btn:hover{border-color:var(--red);background:rgba(204,0,0,.04)}
 .del-cond-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:18px;padding:2px 6px;line-height:1}
@@ -1599,26 +1600,45 @@ function docRuleConditionsMet(rule){
 }
 
 function buildDocRuleConditionsUI(ri,rule){
-  var dynSections=DATA.filter(function(ds){return ds.type==='dynamic';});
-  if(dynSections.length===0) return '<div style="font-size:12px;color:var(--ink3);font-style:italic;margin-bottom:10px">No dynamic sections available. Add a dynamic section first to use conditions.</div>';
+  var allSections=DATA.filter(function(ds){return ds.type==='dynamic'||ds.type==='grouped';});
+  if(allSections.length===0) return '<div style="font-size:12px;color:var(--ink3);font-style:italic;margin-bottom:10px">No question sections available. Add a dynamic or grouped section first to use conditions.</div>';
   var conds=rule.conditions||[];
   var rows=conds.map(function(c,ci){
-    var secOpts=dynSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
+    var secOpts=allSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
     var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
-    var optOpts='';
-    var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
-    if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
-    var multiSize=refSec&&refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
-    return '<div class="condition-row">'
+    var answerHtml='';
+    if(refSec&&refSec.type==='dynamic'){
+      var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
+      var optOpts=refSec.options?refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join(''):'';
+      var multiSize=refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
+      answerHtml='<span class="condition-label">=</span>'
+        +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>';
+    } else if(refSec&&refSec.type==='grouped'){
+      var drops=refSec.dropdowns||[];
+      var gdiSel=c.gdi!=null&&c.gdi<drops.length?c.gdi:0;
+      var gdiOpts=drops.map(function(gd,gdi){return '<option value="'+gdi+'"'+(gdiSel===gdi?' selected':'')+'>'+esc(gd.question||'Dropdown '+(gdi+1))+'</option>';}).join('');
+      var selDrop=drops[gdiSel]||null;
+      var items=selDrop?getDropdownNames(selDrop):[];
+      var itemOpts=items.map(function(nm){return '<option value="'+escA(nm)+'"'+(c.value===nm?' selected':'')+'>'+esc(nm)+'</option>';}).join('');
+      answerHtml=(drops.length>1?'<span class="condition-label">&rarr;</span>'
+        +'<select class="condition-select" data-action="setRuleCondGdi" data-ri="'+ri+'" data-ci="'+ci+'">'+gdiOpts+'</select>':'')
+        +'<span class="condition-label">=</span>'
+        +'<select class="condition-select" data-action="setRuleCondVal" data-ri="'+ri+'" data-ci="'+ci+'"><option value="">-- select value --</option>'+itemOpts+'</select>';
+    } else {
+      answerHtml='<span class="condition-label">=</span>'
+        +'<select class="condition-select" disabled><option>-- select question first --</option></select>';
+    }
+    var andLabel=ci>0?'<div class="condition-and-label">AND</div>':'';
+    return andLabel
+      +'<div class="condition-row">'
       +'<span class="condition-label">If</span>'
       +'<select class="condition-select" data-action="setRuleCondSec" data-ri="'+ri+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
-      +'<span class="condition-label">=</span>'
-      +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>'
+      +answerHtml
       +'<button class="del-cond-btn" data-action="delRuleCond" data-ri="'+ri+'" data-ci="'+ci+'">&times;</button>'
       +'</div>';
   }).join('');
   return '<div style="margin-bottom:12px">'
-    +'<div class="conditions-hdr" style="margin-bottom:8px">Conditions <span style="font-weight:400;color:var(--ink3)">&mdash; include documents only when all conditions below are met (leave empty to always include). Hold Ctrl / ⌘ to select multiple answers.</span></div>'
+    +'<div class="conditions-hdr" style="margin-bottom:8px">Conditions <span style="font-weight:400;color:var(--ink3)">&mdash; include documents only when <strong>all</strong> conditions below are met (leave empty to always include). Hold Ctrl / ⌘ to select multiple answers for dropdown questions.</span></div>'
     +rows
     +'<button class="add-cond-btn" data-action="addRuleCond" data-ri="'+ri+'">+ Add condition</button>'
     +'</div>';
@@ -1674,12 +1694,25 @@ function setRuleCondSec(ri,ci,refSid){
   rule.conditions[ci].sectionId=refSid;
   rule.conditions[ci].optionIndices=[];
   delete rule.conditions[ci].optionIndex;
+  delete rule.conditions[ci].gdi;
+  delete rule.conditions[ci].value;
   saveData();renderDocRules();
 }
 function setRuleCondOpt(ri,ci,optIndices){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
   rule.conditions[ci].optionIndices=Array.isArray(optIndices)?optIndices:[];
   delete rule.conditions[ci].optionIndex;
+  saveData();
+}
+function setRuleCondGdi(ri,ci,gdi){
+  var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
+  rule.conditions[ci].gdi=parseInt(gdi,10);
+  delete rule.conditions[ci].value;
+  saveData();renderDocRules();
+}
+function setRuleCondVal(ri,ci,val){
+  var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
+  rule.conditions[ci].value=val!==''?val:null;
   saveData();
 }
 
@@ -1763,6 +1796,10 @@ document.addEventListener('change',function(e){
   if(srcs){setRuleCondSec(parseInt(srcs.dataset.ri),parseInt(srcs.dataset.ci),srcs.value);return;}
   var srco=e.target.closest('select[data-action="setRuleCondOpt"]');
   if(srco){var selectedR=Array.prototype.filter.call(srco.options,function(o){return o.selected;}).map(function(o){return parseInt(o.value);});setRuleCondOpt(parseInt(srco.dataset.ri),parseInt(srco.dataset.ci),selectedR);return;}
+  var srgs=e.target.closest('select[data-action="setRuleCondGdi"]');
+  if(srgs){setRuleCondGdi(parseInt(srgs.dataset.ri),parseInt(srgs.dataset.ci),srgs.value);return;}
+  var srcv=e.target.closest('select[data-action="setRuleCondVal"]');
+  if(srcv){setRuleCondVal(parseInt(srcv.dataset.ri),parseInt(srcv.dataset.ci),srcv.value);return;}
 });
 document.addEventListener('input',function(e){
   var fi=e.target.closest('input[data-action="upField"]');
