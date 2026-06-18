@@ -362,6 +362,19 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .item-out-row-body{padding:12px;background:#fff;border-top:1px solid var(--border)}
 .del-item-out-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:18px;padding:2px 6px;line-height:1}
 .del-item-out-btn:hover{color:var(--danger)}
+
+/* Document Checklist Rules */
+.doc-rules-outer{background:#fff;border:1.5px solid var(--border2);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.doc-rules-header{background:var(--paper2);padding:13px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.doc-rules-title{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--darkred);margin-bottom:4px}
+.doc-rules-subtitle{font-size:12px;color:var(--ink3);line-height:1.5}
+.doc-rule-row{border-top:1.5px solid var(--border);overflow:hidden}
+.doc-rule-hdr{background:var(--paper2);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.doc-rule-num{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--darkred)}
+.doc-rule-body{padding:16px;background:#fff}
+.doc-rule-docs{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.doc-rule-docs-hdr{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:10px}
+.doc-rules-empty{font-size:13px;color:var(--ink3);font-style:italic;padding:20px 16px;text-align:center}
 </style>
 </head>
 <body>
@@ -475,8 +488,20 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <button class="add-section-btn afix" onclick="addSection('fixed')">+ Fixed section<small style="font-weight:400;font-size:11px;margin-top:2px">static text, always shown</small></button>
       <button class="add-section-btn agrp" onclick="addSection('grouped')">+ Grouped dropdown<small style="font-weight:400;font-size:11px;margin-top:2px">countries / long lists</small></button>
     </div>
+    <!-- Document Checklist Rules -->
+    <div class="doc-rules-outer" id="doc-rules-section" style="margin-top:32px">
+      <div class="doc-rules-header">
+        <div>
+          <div class="doc-rules-title">&#128203; Document Checklist Rules</div>
+          <div class="doc-rules-subtitle">Define which documents to include based on the answers selected. Each rule&rsquo;s documents are included when <strong>all</strong> its conditions are met. Rules with no conditions always include their documents.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="addDocRule()">+ Add rule</button>
+      </div>
+      <div id="doc-rules-list"></div>
+    </div>
+
     <!-- Document Library -->
-    <div class="doc-lib-section" id="doc-lib-section" style="margin-top:32px">
+    <div class="doc-lib-section" id="doc-lib-section" style="margin-top:20px">
       <div class="doc-lib-header" onclick="toggleDocLib()" id="doc-lib-hdr">
         <span class="doc-lib-title">&#128218; Document library &mdash; define documents once, reuse across all sections</span>
         <span class="doc-lib-arrow" id="doc-lib-arrow">&#9660;</span>
@@ -584,16 +609,28 @@ var _pollTimer      = null;
 var _saveTimer      = null;
 var _libSaveTimer   = null;
 
-var LOCAL_KEY='intake_v10_local';
+var LOCAL_KEY='intake_v11_local';
 var LIB_KEY='intake_lib_v2';
+var DOC_RULES=[];
+var DEFAULT_DOC_RULES=[];
+var _docRuleCounter=0;
+function nextRuleId(){return 'dr'+(++_docRuleCounter)+'_'+Date.now();}
 
 function isUsable(d){
-  if(!Array.isArray(d))return false;
-  return d.some(function(s){
+  var arr=Array.isArray(d)?d:(d&&d.v===2&&Array.isArray(d.sections)?d.sections:null);
+  if(!arr) return false;
+  return arr.some(function(s){
     if(s.type==='dynamic')return s.question&&s.question.trim()&&s.options&&s.options.some(function(o){return o.label&&o.label.trim();});
     if(s.type==='grouped')return s.dropdowns&&s.dropdowns.length>0&&s.dropdowns.some(function(gd){return gd.items&&gd.items.some(function(n){return n&&n.trim();});});
     return false;
   });
+}
+
+/* Extract sections + docRules from either old array or new v2 object format */
+function parseSectionsPayload(d){
+  if(Array.isArray(d)) return {sections:d,docRules:null};
+  if(d&&d.v===2) return {sections:Array.isArray(d.sections)?d.sections:null,docRules:Array.isArray(d.docRules)?d.docRules:null};
+  return {sections:null,docRules:null};
 }
 
 var DATA   = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -602,7 +639,7 @@ var DOCLIB = JSON.parse(JSON.stringify(DEFAULT_LIB));
 /* ===== LOAD ===== */
 function loadData(){
   // Render immediately from localStorage so page is never blank
-  try{var r=localStorage.getItem(LOCAL_KEY);if(r){var d=JSON.parse(r);if(isUsable(d))DATA=d;}}catch(e){}
+  try{var r=localStorage.getItem(LOCAL_KEY);if(r){var d=JSON.parse(r);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;}if(p.docRules)DOC_RULES=p.docRules;}}catch(e){}
   try{var r2=localStorage.getItem(LIB_KEY);if(r2){var d2=JSON.parse(r2);if(Array.isArray(d2))DOCLIB=d2;}}catch(e){}
   renderIntake();
 
@@ -611,7 +648,7 @@ function loadData(){
     var si=rows.find(function(r){return r.title==='sections';});
     var li=rows.find(function(r){return r.title==='library';});
     var changed=false;
-    if(si&&si.content){try{var d=JSON.parse(si.content);if(isUsable(d)){DATA=d;_lastSectionsAt=si.updated_at;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
+    if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=si.updated_at;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
     if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=li.content.length+'_'+li.content.substring(0,50);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
     if(changed)renderIntake();
     setSpStatus(true);
@@ -637,7 +674,7 @@ function startPolling(){
       if(si&&si.content){
         var siHash=si.content.length+'_'+si.content.substring(0,50);
         if(siHash!==_lastSectionsAt){
-          try{var d=JSON.parse(si.content);if(isUsable(d)){DATA=d;_lastSectionsAt=siHash;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
+          try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siHash;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(li&&li.content){
@@ -666,10 +703,11 @@ function setSpStatus(online){
 var saveDataTimer=null,saveLibTimer=null;
 
 function saveData(){
-  try{localStorage.setItem(LOCAL_KEY,JSON.stringify(DATA));}catch(e){}
+  var payload={v:2,sections:DATA,docRules:DOC_RULES};
+  var json=JSON.stringify(payload);
+  try{localStorage.setItem(LOCAL_KEY,json);}catch(e){}
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
-    var json=JSON.stringify(DATA);
     sbWrite('sections',json).then(function(rows){
       if(rows&&rows[0]) _lastSectionsAt=json.length+'_'+json.substring(0,50);
       showToast('Saved ✓');
@@ -697,7 +735,7 @@ function saveLib(){
     });
   },1500);
 }
-function hardReset(){DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));saveData();answers={};renderIntake();showToast('Reset to defaults');}
+function hardReset(){DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));DOC_RULES=JSON.parse(JSON.stringify(DEFAULT_DOC_RULES));saveData();answers={};renderIntake();showToast('Reset to defaults');}
 
 /* ===== TABS ===== */
 function switchTab(tab){
@@ -820,12 +858,10 @@ function renderOutput(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){
       if(s.text&&htmlToText(s.text)) segs.push({label:s.label,html:s.text,type:'fixed'});
-      resolveDocs(s.docs).forEach(function(d){docs.push(d);});
     } else if(s.type==='dynamic'){
       var i=answers[s.id]; if(i==null) return;
       var opt=s.options[i]; if(!opt) return;
       if(opt.output&&htmlToText(opt.output)) segs.push({label:s.label,html:opt.output,type:'dynamic'});
-      resolveDocs(opt.docs).forEach(function(d){docs.push(d);});
     } else if(s.type==='grouped'){
       /* Each dropdown in this section has its own output */
       (s.dropdowns||[]).forEach(function(gd,gdi){
@@ -834,10 +870,15 @@ function renderOutput(){
         /* check for per-item custom output first */
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
         var outHtml=io?io.text:(gd.output||'');
-        var outDocs=io?(io.docs||[]):(gd.docs||[]);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
-        resolveDocs(outDocs).forEach(function(d){docs.push(d);});
       });
+    }
+  });
+
+  /* Collect documents from document checklist rules */
+  DOC_RULES.forEach(function(rule){
+    if(docRuleConditionsMet(rule)){
+      resolveDocs(rule.docs).forEach(function(d){docs.push(d);});
     }
   });
 
@@ -929,6 +970,7 @@ function openAccordion(sid){
 /* ===== EDITOR ===== */
 function renderEditor(){
   renderDocLib();
+  renderDocRules();
   var c=document.getElementById('editor-sections');
   c.innerHTML='';
   DATA.forEach(function(s,i){c.appendChild(buildBlock(s,i));});
@@ -1027,8 +1069,7 @@ function buildBlock(s,i){
     body='<div class="field-row"><label class="field-label">Section label</label>'
       +'<input class="field-input" type="text" value="'+escA(s.label)+'" data-action="upField" data-sid="'+escA(s.id)+'" data-field="label"></div>'
       +'<div class="field-row"><label class="field-label">Text (always shown) &mdash; use toolbar to format</label>'
-      +buildRTE('fix-'+s.id,s.text,false)+'</div>'
-      +'<div class="fixed-doc-section">'+buildDocPicker('fixed',s.id,null,null,s.docs||[])+'</div>';
+      +buildRTE('fix-'+s.id,s.text,false)+'</div>';
   } else if(s.type==='dynamic'){
     body='<div class="field-row"><label class="field-label">Section label</label>'
       +'<input class="field-input" type="text" value="'+escA(s.label)+'" data-action="upField" data-sid="'+escA(s.id)+'" data-field="label"></div>'
@@ -1070,7 +1111,6 @@ function buildOptRow(sid,oi,o){
     +'<input class="field-input" type="text" value="'+escA(o.label)+'" placeholder="Label..." data-action="upOpt" data-sid="'+escA(sid)+'" data-oi="'+oi+'" data-field="label"></div>'
     +'<div><div class="opt-col-lbl">Output text (formatted)</div>'+buildRTE('opt-'+sid+'-'+oi,o.output,false)+'</div>'
     +'<button class="del-opt-btn" data-action="delOpt" data-sid="'+escA(sid)+'" data-oi="'+oi+'">x</button></div>'
-    +'<div class="doc-picker-wrap">'+buildDocPicker('opt',sid,oi,null,o.docs||[])+'</div>'
     +'</div>';
 }
 
@@ -1081,7 +1121,7 @@ function buildGroupBlock(sid,gi,g){
     +'<button class="del-group-btn" data-action="delGroup" data-sid="'+escA(sid)+'" data-gi="'+gi+'">Remove</button></div>'
     +'<span class="group-output-label">Output text (formatted)</span>'
     +buildRTE('grp-'+sid+'-'+gi,g.output,true)
-    +'<div style="margin-top:10px">'+buildDocPicker('group',sid,null,gi,g.docs||[])+'</div></div>';
+    +'</div>';
 }
 
 function buildItemOutputRow(sid,gdi,ioi,io){
@@ -1097,7 +1137,6 @@ function buildItemOutputRow(sid,gdi,ioi,io){
     +'<div class="item-out-row-body">'
     +'<label class="field-label" style="margin-bottom:5px">Shared output for <em>'+esc(namesLabel)+'</em></label>'
     +buildRTE(rteId,io.text||'',false)
-    +'<div style="margin-top:10px">'+buildDocPicker('gio',sid,ioi,gdi,io.docs||[])+'</div>'
     +'</div></div>';
 }
 
@@ -1124,7 +1163,6 @@ function buildGroupedDropRow(sid,gdi,gd){
         +'<label class="field-label">Default output &mdash; shown when no custom output exists for the selected item</label>'
         +'<span class="field-hint">This output is shown for any item that does not have a custom output set below.</span>'
         +buildRTE('gd-'+sid+'-'+gdi,gd.output||'',false)
-        +'<div style="margin-top:14px">'+buildDocPicker('gd',sid,null,gdi,gd.docs||[])+'</div>'
       +'</div>'
     +'</div>'
     +'<div class="item-outputs-section">'
@@ -1222,6 +1260,7 @@ function buildSelDocRow(ctx,sid,oi,gi,di,d){
 }
 
 function getDocArr(ctx,sid,oi,gi){
+  if(ctx==='rule'){if(!DOC_RULES[oi])return null;DOC_RULES[oi].docs=DOC_RULES[oi].docs||[];return DOC_RULES[oi].docs;}
   var s=DATA.find(function(s){return s.id===sid;}); if(!s) return null;
   if(ctx==='fixed'){s.docs=s.docs||[];return s.docs;}
   if(ctx==='grouped'){s.docs=s.docs||[];return s.docs;}
@@ -1353,10 +1392,10 @@ function moveSection(sid,dir){
 }
 function resetToDefaults(){
   if(!confirm('Reset to default example content?'))return;
-  DATA=JSON.parse(JSON.stringify(DEFAULT_DATA)); saveData(); renderEditor();
+  DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));DOC_RULES=JSON.parse(JSON.stringify(DEFAULT_DOC_RULES));saveData();renderEditor();
 }
 function exportData(){
-  var bundle={sections:DATA,library:DOCLIB};
+  var bundle={sections:DATA,library:DOCLIB,docRules:DOC_RULES};
   var blob=new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='intake-tool-backup.json';a.click();
   showToast('Backup exported');
@@ -1370,7 +1409,7 @@ function importData(ev){
     try{
       var p=JSON.parse(e.target.result);
       if(Array.isArray(p)) DATA=p;
-      else if(p.sections&&Array.isArray(p.sections)){DATA=p.sections;if(p.library&&Array.isArray(p.library)){DOCLIB=p.library;saveLib();}}
+      else if(p.sections&&Array.isArray(p.sections)){DATA=p.sections;if(p.library&&Array.isArray(p.library)){DOCLIB=p.library;saveLib();}if(p.docRules&&Array.isArray(p.docRules))DOC_RULES=p.docRules;}
       else throw new Error();
       if(!isUsable(DATA)){alert('Import has no question sections.');return;}
       saveData(); renderEditor(); showToast('Imported');
@@ -1543,6 +1582,107 @@ function delItemOutput(sid,gdi,ioi){
 
 function delLibDoc(i){if(!confirm('Remove from library?'))return;DOCLIB.splice(i,1);saveLib();renderDocLib();renderEditor();}
 
+/* ===== DOC RULES ===== */
+function docRuleConditionsMet(rule){
+  if(!rule.conditions||rule.conditions.length===0) return true;
+  return rule.conditions.every(function(c){
+    if(!c.sectionId) return false;
+    var ref=DATA.find(function(r){return r.id===c.sectionId;});
+    if(!ref) return false;
+    if(ref.type==='dynamic'){
+      var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
+      return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;
+    }
+    if(ref.type==='grouped'&&c.gdi!=null){return answers[c.sectionId+'__'+c.gdi]===c.value;}
+    return false;
+  });
+}
+
+function buildDocRuleConditionsUI(ri,rule){
+  var dynSections=DATA.filter(function(ds){return ds.type==='dynamic';});
+  if(dynSections.length===0) return '<div style="font-size:12px;color:var(--ink3);font-style:italic;margin-bottom:10px">No dynamic sections available. Add a dynamic section first to use conditions.</div>';
+  var conds=rule.conditions||[];
+  var rows=conds.map(function(c,ci){
+    var secOpts=dynSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
+    var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
+    var optOpts='';
+    var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
+    if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
+    var multiSize=refSec&&refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
+    return '<div class="condition-row">'
+      +'<span class="condition-label">If</span>'
+      +'<select class="condition-select" data-action="setRuleCondSec" data-ri="'+ri+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
+      +'<span class="condition-label">=</span>'
+      +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>'
+      +'<button class="del-cond-btn" data-action="delRuleCond" data-ri="'+ri+'" data-ci="'+ci+'">&times;</button>'
+      +'</div>';
+  }).join('');
+  return '<div style="margin-bottom:12px">'
+    +'<div class="conditions-hdr" style="margin-bottom:8px">Conditions <span style="font-weight:400;color:var(--ink3)">&mdash; include documents only when all conditions below are met (leave empty to always include). Hold Ctrl / ⌘ to select multiple answers.</span></div>'
+    +rows
+    +'<button class="add-cond-btn" data-action="addRuleCond" data-ri="'+ri+'">+ Add condition</button>'
+    +'</div>';
+}
+
+function buildDocRuleRow(ri,rule){
+  var condsHtml=buildDocRuleConditionsUI(ri,rule);
+  var docsHtml=buildDocPicker('rule','rules',ri,null,rule.docs||[]);
+  return '<div class="doc-rule-row" id="doc-rule-row-'+ri+'">'
+    +'<div class="doc-rule-hdr">'
+    +'<span class="doc-rule-num">Rule '+(ri+1)+'</span>'
+    +'<button class="btn btn-danger btn-sm" data-action="delDocRule" data-ri="'+ri+'">Delete</button>'
+    +'</div>'
+    +'<div class="doc-rule-body">'
+    +condsHtml
+    +'<div class="doc-rule-docs">'
+    +'<div class="doc-rule-docs-hdr">&#128206; Documents to include when conditions are met</div>'
+    +'<div class="doc-picker-wrap" style="background:transparent;border-top:none;padding:0">'+docsHtml+'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+function renderDocRules(){
+  var c=document.getElementById('doc-rules-list'); if(!c) return;
+  if(DOC_RULES.length===0){
+    c.innerHTML='<div class="doc-rules-empty">No rules yet. Click &ldquo;+ Add rule&rdquo; to create one.</div>';
+    return;
+  }
+  c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule);}).join('');
+}
+
+function addDocRule(){
+  DOC_RULES.push({id:nextRuleId(),conditions:[],docs:[]});
+  saveData();renderDocRules();
+}
+function delDocRule(ri){
+  if(!confirm('Delete this rule?'))return;
+  DOC_RULES.splice(ri,1);saveData();renderDocRules();
+}
+function addRuleCond(ri){
+  var rule=DOC_RULES[ri]; if(!rule) return;
+  rule.conditions=rule.conditions||[];
+  rule.conditions.push({sectionId:'',optionIndices:[]});
+  saveData();renderDocRules();
+}
+function delRuleCond(ri,ci){
+  var rule=DOC_RULES[ri]; if(!rule||!rule.conditions) return;
+  rule.conditions.splice(ci,1);saveData();renderDocRules();
+}
+function setRuleCondSec(ri,ci,refSid){
+  var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
+  rule.conditions[ci].sectionId=refSid;
+  rule.conditions[ci].optionIndices=[];
+  delete rule.conditions[ci].optionIndex;
+  saveData();renderDocRules();
+}
+function setRuleCondOpt(ri,ci,optIndices){
+  var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
+  rule.conditions[ci].optionIndices=Array.isArray(optIndices)?optIndices:[];
+  delete rule.conditions[ci].optionIndex;
+  saveData();
+}
+
 /* ===== EVENT DELEGATION ===== */
 document.addEventListener('click',function(e){
   var hdr=e.target.closest('.block-hdr[data-action="accordion"]');
@@ -1580,6 +1720,12 @@ document.addEventListener('click',function(e){
   if(aio){addItemOutput(aio.dataset.sid,parseInt(aio.dataset.gdi));return;}
   var dio=e.target.closest('[data-action="delItemOutput"]');
   if(dio){delItemOutput(dio.dataset.sid,parseInt(dio.dataset.gdi),parseInt(dio.dataset.ioi));return;}
+  var ddr=e.target.closest('[data-action="delDocRule"]');
+  if(ddr){delDocRule(parseInt(ddr.dataset.ri));return;}
+  var arc=e.target.closest('[data-action="addRuleCond"]');
+  if(arc){addRuleCond(parseInt(arc.dataset.ri));return;}
+  var drc=e.target.closest('[data-action="delRuleCond"]');
+  if(drc){delRuleCond(parseInt(drc.dataset.ri),parseInt(drc.dataset.ci));return;}
   var cpf=e.target.closest('[data-action="copyPathField"]');
   if(cpf){
     var oiN=(cpf.dataset.oi!=='null')?parseInt(cpf.dataset.oi):null;
@@ -1613,6 +1759,10 @@ document.addEventListener('change',function(e){
   if(cs){setCondSec(cs.dataset.sid,parseInt(cs.dataset.ci),cs.value);return;}
   var co=e.target.closest('select[data-action="setCondOpt"]');
   if(co){var selected=Array.prototype.filter.call(co.options,function(o){return o.selected;}).map(function(o){return parseInt(o.value);});setCondOpt(co.dataset.sid,parseInt(co.dataset.ci),selected);return;}
+  var srcs=e.target.closest('select[data-action="setRuleCondSec"]');
+  if(srcs){setRuleCondSec(parseInt(srcs.dataset.ri),parseInt(srcs.dataset.ci),srcs.value);return;}
+  var srco=e.target.closest('select[data-action="setRuleCondOpt"]');
+  if(srco){var selectedR=Array.prototype.filter.call(srco.options,function(o){return o.selected;}).map(function(o){return parseInt(o.value);});setRuleCondOpt(parseInt(srco.dataset.ri),parseInt(srco.dataset.ci),selectedR);return;}
 });
 document.addEventListener('input',function(e){
   var fi=e.target.closest('input[data-action="upField"]');
