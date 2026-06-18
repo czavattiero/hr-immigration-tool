@@ -245,12 +245,18 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-picker-dropdown{background:#fff;border:1.5px solid rgba(139,0,0,.2);border-radius:7px;overflow:hidden;margin-bottom:10px;display:none}
 .doc-picker-dropdown.open{display:block}
 .doc-picker-list{display:flex;flex-direction:column}
-.doc-picker-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid rgba(139,0,0,.08);cursor:pointer;transition:background .1s}
+.doc-picker-item{padding:8px 12px;border-bottom:1px solid rgba(139,0,0,.08);cursor:pointer;transition:background .1s}
 .doc-picker-item:last-child{border-bottom:none}
 .doc-picker-item:hover{background:#fff8f8}
+.doc-picker-item-main{display:flex;align-items:center;gap:10px}
 .doc-picker-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--red);cursor:pointer;flex-shrink:0}
 .doc-picker-item-name{font-size:13px;color:var(--ink);flex:1}
 .doc-picker-item-path{font-size:11px;color:var(--ink3)}
+.doc-picker-inline-controls{margin:8px 0 2px 25px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.doc-picker-reminder-inline{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink2);background:#fff8f0;border:1px solid rgba(180,80,0,.18);border-radius:5px;padding:4px 7px;white-space:nowrap}
+.doc-picker-reminder-inline input{width:13px;height:13px;accent-color:var(--red);margin:0}
+.doc-picker-inline-path{flex:1;min-width:180px}
+.doc-picker-inline-url{flex:1;min-width:180px}
 .doc-picker-empty{font-size:13px;color:var(--ink3);font-style:italic;padding:10px 12px}
 
 .selected-docs-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
@@ -1114,8 +1120,8 @@ function buildGroupedDropRow(sid,gdi,gd){
       +'<div class="item-outputs-hint">Override the default output for specific items. Items not listed here use the default output above.</div>'
       +'<datalist id="'+datalistId+'">'+itemsList+'</datalist>'
       +'<div class="item-output-add-row">'
-        +'<input class="item-output-input" type="text" list="'+datalistId+'" id="io-input-'+sid+'-'+gdi+'" placeholder="Type or select an item name...">'
-        +'<button class="add-item-out-btn" data-action="addItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'">+ Add custom output</button>'
+        +'<input class="item-output-input" type="text" list="'+datalistId+'" id="io-input-'+sid+'-'+gdi+'" placeholder="Type one or more item names (comma-separated)...">'
+        +'<button class="add-item-out-btn" data-action="addItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'">+ Add custom output(s)</button>'
       +'</div>'
       +'<div id="io-rows-'+sid+'-'+gdi+'">'+itemOutRows+'</div>'
     +'</div>'
@@ -1123,23 +1129,44 @@ function buildGroupedDropRow(sid,gdi,gd){
 }
 
 
+function buildDocPickerListHtml(ctx,sid,oiS,giS,docs){
+  if(DOCLIB.length===0) return '<div class="doc-picker-empty">Add documents to the library first.</div>';
+  return DOCLIB.map(function(doc){
+    var row=docs.find(function(d){return d.id===doc.id;})||null;
+    var checked=!!row;
+    var di=checked?docs.findIndex(function(d){return d.id===doc.id;}):-1;
+    var isRem=row&&row.reminder?true:false;
+    var pathVal=row&&row.path!=null?row.path:'';
+    var urlVal=row&&row.url!=null?row.url:'';
+    var pathPh=doc.path||'File path';
+    var urlPh=doc.url||'Link (https://...)';
+    var inlineControls=checked
+      ?'<div class="doc-picker-inline-controls" data-role="doc-control">'
+        +'<label class="doc-picker-reminder-inline"><input type="checkbox"'+(isRem?' checked':'')+' data-action="toggleReminder" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-di="'+di+'"><span>Reminder only</span></label>'
+        +(isRem?'':'<input class="path-input doc-picker-inline-path" type="text" value="'+escA(pathVal)+'" placeholder="'+escA(pathPh)+'" data-action="setDocField" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-di="'+di+'" data-field="path">')
+        +(isRem?'':'<button type="button" class="copy-path-inline-btn" data-action="copyPathField" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-di="'+di+'" title="Copy path">&#128203;</button>')
+        +(isRem?'':'<input class="path-input doc-picker-inline-url" type="url" value="'+escA(urlVal)+'" placeholder="'+escA(urlPh)+'" data-action="setDocField" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-di="'+di+'" data-field="url">')
+      +'</div>'
+      :'';
+    return '<div class="doc-picker-item" data-action="toggleDoc" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-lid="'+escA(doc.id)+'">'
+      +'<div class="doc-picker-item-main">'
+      +'<input type="checkbox"'+(checked?' checked':'')+' tabindex="-1">'
+      +'<div><div class="doc-picker-item-name">'+esc(doc.name||'(unnamed)')+'</div>'
+      +(doc.path?'<div class="doc-picker-item-path">'+esc(doc.path)+'</div>':'')
+      +'</div></div>'
+      +inlineControls
+      +'</div>';
+  }).join('');
+}
+
 function buildDocPicker(ctx,sid,oi,gi,docs){
   var oiS=oi!=null?String(oi):'null',giS=gi!=null?String(gi):'null';
   var listId='sdlist-'+ctx+'-'+sid+'-'+oiS+'-'+giS;
   var dropId='drop-'+ctx+'-'+sid+'-'+oiS+'-'+giS;
   var countId='cnt-'+ctx+'-'+sid+'-'+oiS+'-'+giS;
   var checkedCount=docs.filter(function(d){return d.id&&d.id!=='oneoff';}).length;
-  var libHtml=DOCLIB.length===0
-    ?'<div class="doc-picker-empty">Add documents to the library first.</div>'
-    :DOCLIB.map(function(doc){
-        var checked=docs.some(function(d){return d.id===doc.id;});
-        return '<div class="doc-picker-item" data-action="toggleDoc" data-ctx="'+escA(ctx)+'" data-sid="'+escA(sid)+'" data-oi="'+oiS+'" data-gi="'+giS+'" data-lid="'+escA(doc.id)+'">'
-          +'<input type="checkbox"'+(checked?' checked':'')+' tabindex="-1">'
-          +'<div><div class="doc-picker-item-name">'+esc(doc.name||'(unnamed)')+'</div>'
-          +(doc.path?'<div class="doc-picker-item-path">'+esc(doc.path)+'</div>':'')
-          +'</div></div>';
-      }).join('');
-  var rowsHtml=docs.map(function(d,di){return buildSelDocRow(ctx,sid,oi!=null?oi:null,gi!=null?gi:null,di,d);}).join('');
+  var libHtml=buildDocPickerListHtml(ctx,sid,oiS,giS,docs);
+  var rowsHtml=docs.map(function(d,di){return !d.id||d.id==='oneoff'?buildSelDocRow(ctx,sid,oi!=null?oi:null,gi!=null?gi:null,di,d):'';}).join('');
   var triggerLabel=checkedCount>0?(checkedCount+' document'+(checkedCount>1?'s':'')+' selected — click to change'):'Select documents to attach...';
   return '<div class="doc-picker-title">&#128206; Documents to attach for this answer</div>'
     +'<button type="button" class="doc-picker-trigger" data-action="toggleDropdown" data-drop="'+dropId+'" data-cnt="'+countId+'">'
@@ -1196,11 +1223,11 @@ function rerenderSelDocs(ctx,sid,oi,gi){
   var giN=(gi!==null&&gi!=='null')?(typeof gi==='string'?parseInt(gi):gi):null;
   var docs=getDocArr(ctx,sid,oiN,giN)||[];
   var oiS=oiN!=null?String(oiN):'null',giS=giN!=null?String(giN):'null';
+  var dropList=document.querySelector('#drop-'+ctx+'-'+sid+'-'+oiS+'-'+giS+' .doc-picker-list');
+  if(dropList) dropList.innerHTML=buildDocPickerListHtml(ctx,sid,oiS,giS,docs);
   var list=document.getElementById('sdlist-'+ctx+'-'+sid+'-'+oiS+'-'+giS);
   if(list){
-    list.innerHTML=docs.map(function(d,di){return buildSelDocRow(ctx,sid,oiN,giN,di,d);}).join('');
-    var picker=list.closest('.doc-picker-wrap')||list.closest('.option-row')||list.closest('.grouped-output-col')||list.closest('.fixed-doc-section');
-    if(picker){picker.querySelectorAll('.doc-picker-item input[type=checkbox]').forEach(function(cb,ci){if(DOCLIB[ci])cb.checked=docs.some(function(d){return d.id===DOCLIB[ci].id;});});}
+    list.innerHTML=docs.map(function(d,di){return !d.id||d.id==='oneoff'?buildSelDocRow(ctx,sid,oiN,giN,di,d):'';}).join('');
   }
 }
 function updatePickerTrigger(ctx,sid,oi,gi){
@@ -1241,6 +1268,7 @@ function toggleReminder(ctx,sid,oi,gi,di,wrapId,checked){
   var giN=(gi!==null&&gi!=='null')?parseInt(gi):null;
   var docs=getDocArr(ctx,sid,oiN,giN);
   if(docs&&docs[di]!==undefined){docs[di].reminder=checked;saveData();}
+  rerenderSelDocs(ctx,sid,oi,gi);
   var w=document.getElementById(wrapId); if(w) w.style.display=checked?'none':'';
 }
 function setDocField(ctx,sid,oi,gi,di,field,value){
@@ -1423,21 +1451,42 @@ function setCondOpt(sid,ci,optIdx){
   saveData();
 }
 
+function parseItemOutputInput(raw){
+  var seen={};
+  return String(raw||'').split(/[\n,;]+/).map(function(x){return x.trim();}).filter(function(x){
+    if(!x) return false;
+    var key=x.toLowerCase();
+    if(seen[key]) return false;
+    seen[key]=true;
+    return true;
+  });
+}
+
 /* ===== PER-ITEM OUTPUTS ===== */
 function addItemOutput(sid,gdi){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.dropdowns||!s.dropdowns[gdi]) return;
   var inputEl=document.getElementById('io-input-'+sid+'-'+gdi);
-  var itemName=inputEl?inputEl.value.trim():'';
-  if(!itemName){showToast('Enter an item name first');return;}
+  var itemNames=parseItemOutputInput(inputEl?inputEl.value:'');
+  if(itemNames.length===0){showToast('Enter at least one item name first');return;}
   var gd=s.dropdowns[gdi];
   gd.itemOutputs=gd.itemOutputs||[];
-  if(gd.itemOutputs.some(function(x){return x.item===itemName;})){showToast('Custom output already exists for this item');return;}
-  gd.itemOutputs.push({item:itemName,text:'',docs:[]});
-  var ioi=gd.itemOutputs.length-1;
   var c=document.getElementById('io-rows-'+sid+'-'+gdi);
-  if(c) c.insertAdjacentHTML('beforeend',buildItemOutputRow(sid,gdi,ioi,gd.itemOutputs[ioi]));
-  (function(io){ initRTE('gio-'+sid+'-'+gdi+'-'+ioi, function(h){ io.text=h; saveData(); }); })(gd.itemOutputs[ioi]);
+  var existing={};
+  gd.itemOutputs.forEach(function(x){existing[String(x.item||'').trim().toLowerCase()]=true;});
+  var added=0,skipped=0;
+  itemNames.forEach(function(itemName){
+    var key=itemName.toLowerCase();
+    if(existing[key]){skipped++;return;}
+    gd.itemOutputs.push({item:itemName,text:'',docs:[]});
+    existing[key]=true;
+    var ioi=gd.itemOutputs.length-1;
+    if(c) c.insertAdjacentHTML('beforeend',buildItemOutputRow(sid,gdi,ioi,gd.itemOutputs[ioi]));
+    (function(io,idx){ initRTE('gio-'+sid+'-'+gdi+'-'+idx, function(h){ io.text=h; saveData(); }); })(gd.itemOutputs[ioi],ioi);
+    added++;
+  });
   if(inputEl) inputEl.value='';
+  if(added===0&&skipped>0){showToast('Custom output already exists for all items entered');return;}
+  if(skipped>0) showToast('Added '+added+' custom output'+(added>1?'s':'')+' ('+skipped+' duplicate'+(skipped>1?'s':'')+' skipped)');
   saveData();
 }
 function delItemOutput(sid,gdi,ioi){
@@ -1455,8 +1504,9 @@ document.addEventListener('click',function(e){
   if(hdr&&!e.target.closest('button')){toggleAccordion(hdr.dataset.sid);return;}
   var trigger=e.target.closest('.doc-picker-trigger[data-action="toggleDropdown"]');
   if(trigger){var drop=document.getElementById(trigger.dataset.drop),arr=document.getElementById('arr-'+trigger.dataset.drop);if(drop){var open=drop.classList.toggle('open');if(arr)arr.classList.toggle('open',open);}return;}
+  var inDocControl=!!e.target.closest('[data-role="doc-control"]');
   var item=e.target.closest('.doc-picker-item[data-action="toggleDoc"]');
-  if(item){toggleDoc(item.dataset.ctx,item.dataset.sid,item.dataset.oi,item.dataset.gi,item.dataset.lid);updatePickerTrigger(item.dataset.ctx,item.dataset.sid,item.dataset.oi,item.dataset.gi);return;}
+  if(item&&!inDocControl){toggleDoc(item.dataset.ctx,item.dataset.sid,item.dataset.oi,item.dataset.gi,item.dataset.lid);updatePickerTrigger(item.dataset.ctx,item.dataset.sid,item.dataset.oi,item.dataset.gi);return;}
   var rm=e.target.closest('.sel-doc-remove[data-action="removeSelDoc"]');
   if(rm){removeSelDoc(rm.dataset.ctx,rm.dataset.sid,rm.dataset.oi,rm.dataset.gi,parseInt(rm.dataset.di));updatePickerTrigger(rm.dataset.ctx,rm.dataset.sid,rm.dataset.oi,rm.dataset.gi);return;}
   var ao=e.target.closest('.add-oneoff-btn[data-action="addOneoff"]');
