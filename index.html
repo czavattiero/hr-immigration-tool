@@ -826,7 +826,7 @@ function renderOutput(){
         var key=s.id+'__'+gdi;
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
-        var io=(gd.itemOutputs||[]).find(function(x){return x.item===cn;});
+        var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});
         var outHtml=io?io.text:(gd.output||'');
         var outDocs=io?(io.docs||[]):(gd.docs||[]);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
@@ -878,7 +878,7 @@ function copyOutputText(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(htmlToText(s.text));}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(htmlToText(o.output));}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return x.item===cn;});var t=io?io.text:(gd.output||'');if(t) parts.push(htmlToText(t));});}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});var t=io?io.text:(gd.output||'');if(t) parts.push(htmlToText(t));});}
   });
   navigator.clipboard.writeText(parts.join('\n\n')).then(function(){var b=document.getElementById('copy-text-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy plain text';},2000);});
 }
@@ -887,7 +887,7 @@ function copyOutputHTML(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(s.text);}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(o.output);}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return x.item===cn;});var h=io?io.text:(gd.output||'');if(h) parts.push(h);});}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);return arr.indexOf(cn)!==-1;});var h=io?io.text:(gd.output||'');if(h) parts.push(h);});}
   });
   var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
@@ -1077,13 +1077,16 @@ function buildGroupBlock(sid,gi,g){
 
 function buildItemOutputRow(sid,gdi,ioi,io){
   var rteId='gio-'+sid+'-'+gdi+'-'+ioi;
+  var itemArr=Array.isArray(io.items)?io.items:(io.item?[io.item]:[]);
+  var namesDisplay=itemArr.map(function(n){return '<span style="display:inline-block;background:var(--paper2);border:1px solid var(--border2);border-radius:4px;padding:1px 7px;font-size:12px;margin:1px 2px">'+esc(n)+'</span>';}).join('');
+  var namesLabel=itemArr.join(', ');
   return '<div class="item-out-row" id="iorow-'+sid+'-'+gdi+'-'+ioi+'">'
-    +'<div class="item-out-row-hdr">'
-    +'<span class="item-out-row-name">&#127758; '+esc(io.item)+'</span>'
+    +'<div class="item-out-row-hdr" style="flex-wrap:wrap;gap:6px">'
+    +'<span class="item-out-row-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">&#127758; '+namesDisplay+'</span>'
     +'<button class="del-item-out-btn" data-action="delItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'" data-ioi="'+ioi+'">&times;</button>'
     +'</div>'
     +'<div class="item-out-row-body">'
-    +'<label class="field-label" style="margin-bottom:5px">Custom output for <em>'+esc(io.item)+'</em></label>'
+    +'<label class="field-label" style="margin-bottom:5px">Shared output for <em>'+esc(namesLabel)+'</em></label>'
     +buildRTE(rteId,io.text||'',false)
     +'<div style="margin-top:10px">'+buildDocPicker('gio',sid,ioi,gdi,io.docs||[])+'</div>'
     +'</div></div>';
@@ -1116,12 +1119,12 @@ function buildGroupedDropRow(sid,gdi,gd){
       +'</div>'
     +'</div>'
     +'<div class="item-outputs-section">'
-      +'<div class="item-outputs-hdr">&#127758; Per-item custom outputs</div>'
-      +'<div class="item-outputs-hint">Override the default output for specific items. Items not listed here use the default output above.</div>'
+      +'<div class="item-outputs-hdr">&#127758; Custom outputs for groups of items</div>'
+      +'<div class="item-outputs-hint">Enter one or more item names (comma-separated) and add a shared output for that group. Items not listed here use the default output above. All items still appear together in the same dropdown.</div>'
       +'<datalist id="'+datalistId+'">'+itemsList+'</datalist>'
       +'<div class="item-output-add-row">'
-        +'<input class="item-output-input" type="text" list="'+datalistId+'" id="io-input-'+sid+'-'+gdi+'" placeholder="Type one or more item names (comma-separated)...">'
-        +'<button class="add-item-out-btn" data-action="addItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'">+ Add custom output(s)</button>'
+        +'<input class="item-output-input" type="text" list="'+datalistId+'" id="io-input-'+sid+'-'+gdi+'" placeholder="Item names (comma-separated) — they will share one output...">'
+        +'<button class="add-item-out-btn" data-action="addItemOutput" data-sid="'+escA(sid)+'" data-gdi="'+gdi+'">+ Add output group</button>'
       +'</div>'
       +'<div id="io-rows-'+sid+'-'+gdi+'">'+itemOutRows+'</div>'
     +'</div>'
@@ -1470,23 +1473,26 @@ function addItemOutput(sid,gdi){
   if(itemNames.length===0){showToast('Enter at least one item name first');return;}
   var gd=s.dropdowns[gdi];
   gd.itemOutputs=gd.itemOutputs||[];
-  var c=document.getElementById('io-rows-'+sid+'-'+gdi);
+  /* build a set of all items already covered by existing output groups */
   var existing={};
-  gd.itemOutputs.forEach(function(x){existing[String(x.item||'').trim().toLowerCase()]=true;});
-  var added=0,skipped=0;
+  gd.itemOutputs.forEach(function(x){
+    var arr=Array.isArray(x.items)?x.items:(x.item?[x.item]:[]);
+    arr.forEach(function(n){existing[String(n).trim().toLowerCase()]=true;});
+  });
+  var newItems=[],skipped=0;
   itemNames.forEach(function(itemName){
     var key=itemName.toLowerCase();
-    if(existing[key]){skipped++;return;}
-    gd.itemOutputs.push({item:itemName,text:'',docs:[]});
-    existing[key]=true;
-    var ioi=gd.itemOutputs.length-1;
-    if(c) c.insertAdjacentHTML('beforeend',buildItemOutputRow(sid,gdi,ioi,gd.itemOutputs[ioi]));
-    (function(io,idx){ initRTE('gio-'+sid+'-'+gdi+'-'+idx, function(h){ io.text=h; saveData(); }); })(gd.itemOutputs[ioi],ioi);
-    added++;
+    if(existing[key]){skipped++;} else {newItems.push(itemName);}
   });
+  if(newItems.length===0){showToast('Custom output already exists for all items entered');return;}
+  /* create one output group for all new items */
+  var c=document.getElementById('io-rows-'+sid+'-'+gdi);
+  gd.itemOutputs.push({items:newItems,text:'',docs:[]});
+  var ioi=gd.itemOutputs.length-1;
+  if(c) c.insertAdjacentHTML('beforeend',buildItemOutputRow(sid,gdi,ioi,gd.itemOutputs[ioi]));
+  (function(io,idx){ initRTE('gio-'+sid+'-'+gdi+'-'+idx, function(h){ io.text=h; saveData(); }); })(gd.itemOutputs[ioi],ioi);
   if(inputEl) inputEl.value='';
-  if(added===0&&skipped>0){showToast('Custom output already exists for all items entered');return;}
-  if(skipped>0) showToast('Added '+added+' custom output'+(added>1?'s':'')+' ('+skipped+' duplicate'+(skipped>1?'s':'')+' skipped)');
+  if(skipped>0) showToast('Output group added ('+skipped+' duplicate'+(skipped>1?'s':'')+' skipped)');
   saveData();
 }
 function delItemOutput(sid,gdi,ioi){
