@@ -82,13 +82,9 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .docs-prompt{background:#fff3cc;border-bottom:2px solid var(--gold);padding:13px 20px;display:none}
 .docs-prompt.visible{display:block}
 .docs-prompt-hdr{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
-.docs-prompt-list{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:4px}
-.doc-chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid rgba(122,74,0,.25);border-radius:6px;padding:5px 11px;font-size:12.5px;font-weight:500;color:#5a3a00}
-.doc-chip.reminder{background:#fff0e0;border-color:rgba(180,80,0,.35);color:#7a3500}
-.manual-badge{font-size:10px;background:#E05000;color:#fff;border-radius:3px;padding:1px 5px;letter-spacing:.04em}
-.reminder-note{font-size:11.5px;color:#7a3500;margin-top:7px;padding:7px 10px;background:rgba(255,255,255,.6);border-radius:5px;border-left:3px solid #E05000;display:none}
+.reminder-note{font-size:11px;color:#7a3500;margin-top:6px;padding:5px 8px;background:rgba(255,255,255,.6);border-radius:5px;border-left:3px solid #E05000;display:none}
 .reminder-note.visible{display:block}
-.docs-files-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.docs-files-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
 
 .output-body{background:#fff;padding:0}
 .output-seg{padding:12px 22px}
@@ -106,20 +102,20 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .files-panel-hdr{background:var(--darkred);padding:13px 18px;display:flex;align-items:center;gap:10px}
 .files-panel-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.85);font-weight:500}
 .files-panel-body{background:#fff;padding:16px 20px;display:flex;flex-direction:column;gap:12px}
-.file-card{background:#fdeaea;border:1.5px solid rgba(139,0,0,.2);border-radius:9px;padding:13px 16px;display:flex;align-items:flex-start;gap:12px}
+.file-card{background:#fdeaea;border:1.5px solid rgba(139,0,0,.2);border-radius:7px;padding:9px 12px;display:flex;align-items:flex-start;gap:10px}
 .file-card.reminder-card{background:#fff0e0;border-color:rgba(180,80,0,.3)}
-.file-card-icon{font-size:22px;flex-shrink:0;margin-top:1px}
+.file-card-icon{font-size:18px;flex-shrink:0;margin-top:1px}
 .file-card-body{flex:1;min-width:0}
-.file-card-name{font-size:14px;font-weight:500;color:var(--darkred);margin-bottom:5px;word-break:break-word}
+.file-card-name{font-size:12.5px;font-weight:500;color:var(--darkred);margin-bottom:4px;word-break:break-word}
 .file-card-name.reminder-name{color:#7a3500}
-.file-card-path{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
-.file-card-path-label{font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
-.file-card-path-value{font-size:12.5px;font-family:monospace;color:var(--ink2);background:var(--paper2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;word-break:break-all;flex:1;min-width:0}
-.copy-path-btn{background:none;border:1px solid rgba(139,0,0,.2);border-radius:5px;padding:3px 9px;font-size:11.5px;color:var(--darkred);cursor:pointer;white-space:nowrap;font-family:"DM Sans",sans-serif}
+.file-card-path{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.file-card-path-label{font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.file-card-path-value{font-size:11.5px;font-family:monospace;color:var(--ink2);background:var(--paper2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;word-break:break-all;flex:1;min-width:0}
+.copy-path-btn{background:none;border:1px solid rgba(139,0,0,.2);border-radius:4px;padding:2px 7px;font-size:10.5px;color:var(--darkred);cursor:pointer;white-space:nowrap;font-family:"DM Sans",sans-serif}
 .copy-path-btn:hover{background:#fdeaea}
-.file-card-link{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--darkred);border:1.5px solid rgba(139,0,0,.2);border-radius:6px;padding:5px 12px;font-size:12.5px;font-weight:500;text-decoration:none;font-family:"DM Sans",sans-serif}
+.file-card-link{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--darkred);border:1.5px solid rgba(139,0,0,.2);border-radius:5px;padding:3px 10px;font-size:11.5px;font-weight:500;text-decoration:none;font-family:"DM Sans",sans-serif}
 .file-card-link:hover{background:#fdeaea}
-.reminder-msg{font-size:12px;color:#9a5000;margin-top:4px;font-style:italic}
+.reminder-msg{font-size:11px;color:#9a5000;margin-top:3px;font-style:italic}
 .reset-btn{display:block;width:100%;margin-top:14px;background:transparent;border:1.5px solid var(--border);border-radius:var(--radius);padding:11px;font-family:"DM Sans",sans-serif;font-size:13.5px;color:var(--ink2);cursor:pointer}
 .reset-btn:hover{border-color:var(--red);color:var(--red)}
 
@@ -449,7 +445,6 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       </div>
       <div class="docs-prompt" id="docs-prompt">
         <div class="docs-prompt-hdr">&#128206; Attach to this email before sending</div>
-        <div class="docs-prompt-list" id="docs-prompt-list"></div>
         <div class="reminder-note" id="reminder-note">&#9888; Items marked MANUAL have no file path &mdash; locate and attach these documents yourself before sending.</div>
         <div class="docs-files-list" id="docs-files-list"></div>
       </div>
@@ -841,7 +836,7 @@ function renderOutput(){
   var os=document.getElementById('output-section'),ob=document.getElementById('output-body');
   var dfl=document.getElementById('docs-files-list');
   var rb=document.getElementById('reset-btn'),dp=document.getElementById('docs-prompt');
-  var dl=document.getElementById('docs-prompt-list'),rn=document.getElementById('reminder-note');
+  var rn=document.getElementById('reminder-note');
   var active=DATA.filter(function(s){return s.type==='dynamic'||s.type==='grouped';});
   var ac=active.filter(function(s){
     if(s.type==='grouped') return (s.dropdowns||[]).some(function(gd,gdi){return answers[s.id+'__'+gdi]!=null;});
@@ -887,14 +882,6 @@ function renderOutput(){
   if(docs.length>0){
     dp.classList.add('visible');
     var hasRem=docs.some(function(d){return d.reminder;});
-    dl.innerHTML=docs.map(function(d){
-      var nm=d.name||(d.path?d.path.replace(/[\\]/g,'/').split('/').pop():'Document');
-      var lk=nm.toLowerCase();
-      var icon=lk.indexOf('.pdf')>=0?'&#128196;':lk.indexOf('.doc')>=0?'&#128221;':'&#128206;';
-      var cls=d.reminder?'doc-chip reminder':'doc-chip';
-      var badge=d.reminder?' <span class="manual-badge">MANUAL</span>':'';
-      return '<span class="'+cls+'">'+icon+' '+esc(nm)+badge+'</span>';
-    }).join('');
     if(rn) rn.className='reminder-note'+(hasRem?' visible':'');
     if(dfl){
       dfl.innerHTML=docs.map(function(d,i){
