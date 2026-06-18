@@ -613,6 +613,8 @@ var LOCAL_KEY='intake_v11_local';
 var LIB_KEY='intake_lib_v2';
 var DOC_RULES=[];
 var DEFAULT_DOC_RULES=[];
+var _docRuleCounter=0;
+function nextRuleId(){return 'dr'+(++_docRuleCounter)+'_'+Date.now();}
 
 function isUsable(d){
   var arr=Array.isArray(d)?d:(d&&d.v===2&&Array.isArray(d.sections)?d.sections:null);
@@ -1584,14 +1586,15 @@ function delLibDoc(i){if(!confirm('Remove from library?'))return;DOCLIB.splice(i
 function docRuleConditionsMet(rule){
   if(!rule.conditions||rule.conditions.length===0) return true;
   return rule.conditions.every(function(c){
+    if(!c.sectionId) return false;
     var ref=DATA.find(function(r){return r.id===c.sectionId;});
-    if(!ref) return true;
+    if(!ref) return false;
     if(ref.type==='dynamic'){
       var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
       return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;
     }
     if(ref.type==='grouped'&&c.gdi!=null){return answers[c.sectionId+'__'+c.gdi]===c.value;}
-    return true;
+    return false;
   });
 }
 
@@ -1649,7 +1652,7 @@ function renderDocRules(){
 }
 
 function addDocRule(){
-  DOC_RULES.push({id:'dr'+Date.now(),conditions:[],docs:[]});
+  DOC_RULES.push({id:nextRuleId(),conditions:[],docs:[]});
   saveData();renderDocRules();
 }
 function delDocRule(ri){
