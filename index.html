@@ -82,8 +82,6 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .docs-prompt{background:#fff3cc;border-bottom:2px solid var(--gold);padding:13px 20px;display:none}
 .docs-prompt.visible{display:block}
 .docs-prompt-hdr{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
-.reminder-note{font-size:11px;color:#7a3500;margin-top:6px;padding:5px 8px;background:rgba(255,255,255,.6);border-radius:5px;border-left:3px solid #E05000;display:none}
-.reminder-note.visible{display:block}
 .docs-files-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
 
 .output-body{background:#fff;padding:0}
@@ -445,7 +443,6 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       </div>
       <div class="docs-prompt" id="docs-prompt">
         <div class="docs-prompt-hdr">&#128206; Attach to this email before sending</div>
-        <div class="reminder-note" id="reminder-note">&#9888; Items marked MANUAL have no file path &mdash; locate and attach these documents yourself before sending.</div>
         <div class="docs-files-list" id="docs-files-list"></div>
       </div>
       <div class="output-body" id="output-body"></div>
@@ -836,7 +833,6 @@ function renderOutput(){
   var os=document.getElementById('output-section'),ob=document.getElementById('output-body');
   var dfl=document.getElementById('docs-files-list');
   var rb=document.getElementById('reset-btn'),dp=document.getElementById('docs-prompt');
-  var rn=document.getElementById('reminder-note');
   var active=DATA.filter(function(s){return s.type==='dynamic'||s.type==='grouped';});
   var ac=active.filter(function(s){
     if(s.type==='grouped') return (s.dropdowns||[]).some(function(gd,gdi){return answers[s.id+'__'+gdi]!=null;});
@@ -882,7 +878,6 @@ function renderOutput(){
   if(docs.length>0){
     dp.classList.add('visible');
     var hasRem=docs.some(function(d){return d.reminder;});
-    if(rn) rn.className='reminder-note'+(hasRem?' visible':'');
     if(dfl){
       dfl.innerHTML=docs.map(function(d,i){
         var nm=d.name||(d.path?d.path.replace(/[\\]/g,'/').split('/').pop():'Document');
