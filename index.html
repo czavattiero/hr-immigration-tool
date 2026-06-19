@@ -959,8 +959,15 @@ function toggleDocRuleAccordion(rid){
     var rrid=row.dataset.rid;
     var hdr=row.querySelector('.doc-rule-hdr'),bw=row.querySelector('.doc-rule-body-wrap');
     if(!hdr||!bw) return;
-    if(rrid===rid){var isOpen=bw.classList.contains('open');bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);openDocRuleId=isOpen?null:rid;}
-    else{bw.classList.remove('open');hdr.classList.remove('open');}
+    if(rrid===rid){
+      var isOpen=bw.classList.contains('open');
+      bw.classList.toggle('open',!isOpen);
+      hdr.classList.toggle('open',!isOpen);
+      openDocRuleId=isOpen?null:rid;
+    } else {
+      bw.classList.remove('open');
+      hdr.classList.remove('open');
+    }
   });
 }
 
@@ -1672,7 +1679,7 @@ function renderDocRules(){
   var touched=false;
   DOC_RULES.forEach(function(rule){
     if(!rule.id){rule.id=nextRuleId();touched=true;}
-    if(typeof rule.label!=='string'){rule.label=rule.label!=null?String(rule.label):'';touched=true;}
+    if(typeof rule.label!=='string'){rule.label=String(rule.label||'');touched=true;}
     if(!Array.isArray(rule.conditions)){rule.conditions=[];touched=true;}
     if(!Array.isArray(rule.docs)){rule.docs=[];touched=true;}
   });
@@ -1693,7 +1700,7 @@ function delDocRule(ri){
   if(!confirm('Delete this rule?'))return;
   var removed=DOC_RULES.splice(ri,1)[0];
   if(removed&&removed.id===openDocRuleId){
-    var fallback=DOC_RULES[Math.max(0,ri-1)];
+    var fallback=ri>0?DOC_RULES[ri-1]:DOC_RULES[0];
     openDocRuleId=fallback?fallback.id:null;
   }
   saveData();renderDocRules();
