@@ -101,11 +101,11 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .files-panel-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.85);font-weight:500}
 .files-panel-body{background:#fff;padding:16px 20px;display:flex;flex-direction:column;gap:12px}
 .file-card{background:#fdeaea;border:1.5px solid rgba(139,0,0,.2);border-radius:7px;padding:9px 12px;display:flex;align-items:flex-start;gap:10px}
-.file-card.reminder-card{background:#fff0e0;border-color:rgba(180,80,0,.3)}
+.file-card.reminder-card{background:linear-gradient(135deg,#ffe8c2 0%,#ffd49a 100%);border:1.5px solid #b45200;border-left:5px solid #b45200;box-shadow:0 2px 8px rgba(180,80,0,.18)}
 .file-card-icon{font-size:18px;flex-shrink:0;margin-top:1px}
 .file-card-body{flex:1;min-width:0}
 .file-card-name{font-size:12.5px;font-weight:500;color:var(--darkred);margin-bottom:4px;word-break:break-word}
-.file-card-name.reminder-name{color:#7a3500}
+.file-card-name.reminder-name{color:#7a3500;font-weight:700}
 .file-card-path{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
 .file-card-path-label{font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
 .file-card-path-value{font-size:11.5px;font-family:monospace;color:var(--ink2);background:var(--paper2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;word-break:break-all;flex:1;min-width:0}
@@ -113,7 +113,8 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .copy-path-btn:hover{background:#fdeaea}
 .file-card-link{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--darkred);border:1.5px solid rgba(139,0,0,.2);border-radius:5px;padding:3px 10px;font-size:11.5px;font-weight:500;text-decoration:none;font-family:"DM Sans",sans-serif}
 .file-card-link:hover{background:#fdeaea}
-.reminder-msg{font-size:11px;color:#9a5000;margin-top:3px;font-style:italic}
+.reminder-msg{font-size:11px;color:#7a3500;margin-top:3px;font-style:italic;font-weight:600}
+.reminder-badge{display:inline-block;background:#b45200;color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-radius:3px;padding:1px 6px;margin-bottom:5px}
 .reset-btn{display:block;width:100%;margin-top:14px;background:transparent;border:1.5px solid var(--border);border-radius:var(--radius);padding:11px;font-family:"DM Sans",sans-serif;font-size:13.5px;color:var(--ink2);cursor:pointer}
 .reset-btn:hover{border-color:var(--red);color:var(--red)}
 
@@ -883,7 +884,7 @@ function renderOutput(){
         var nm=d.name||(d.path?d.path.replace(/[\\]/g,'/').split('/').pop():'Document');
         var lk=nm.toLowerCase();
         var icon=lk.indexOf('.pdf')>=0?'&#128196;':lk.indexOf('.doc')>=0?'&#128221;':'&#128206;';
-        if(d.reminder){return '<div class="file-card reminder-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name reminder-name">'+esc(nm)+'</div><div class="reminder-msg">&#9888; Locate and attach this document manually before sending.</div></div></div>';}
+        if(d.reminder){return '<div class="file-card reminder-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="reminder-badge">&#9888; Reminder</div><div class="file-card-name reminder-name">'+esc(nm)+'</div><div class="reminder-msg">Locate and attach this document manually before sending.</div></div></div>';}
         var ph=d.path?'<div class="file-card-path"><span class="file-card-path-label">File path</span><span class="file-card-path-value" id="fp-'+i+'">'+esc(d.path)+'</span><button class="copy-path-btn" data-target="fp-'+i+'">Copy path</button></div>':'';
         var lh=d.url?'<div style="margin-top:6px"><a class="file-card-link" href="'+escA(d.url)+'" target="_blank" rel="noopener">Open / attach via Outlook</a></div>':'';
         return '<div class="file-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name">'+esc(nm)+'</div>'+ph+lh+'</div></div>';
