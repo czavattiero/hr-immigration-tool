@@ -373,7 +373,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-rule-arrow{font-size:12px;color:var(--ink3);transition:transform .25s}
 .doc-rule-hdr.open .doc-rule-arrow{transform:rotate(180deg)}
 .doc-rule-body-wrap{max-height:0;overflow:hidden;transition:max-height .3s ease}
-.doc-rule-body-wrap.open{max-height:2600px;transition:max-height .5s ease}
+.doc-rule-body-wrap.open{max-height:4000px;transition:max-height .5s ease}
 .doc-rule-body{padding:16px;background:#fff;border-top:1px solid rgba(80,10,10,.08)}
 .doc-rule-label-row{margin-bottom:12px}
 .doc-rule-docs{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
@@ -1677,7 +1677,10 @@ function renderDocRules(){
     if(!Array.isArray(rule.docs)){rule.docs=[];touched=true;}
   });
   if(touched) saveData();
-  if(!DOC_RULES.some(function(rule){return rule.id===openDocRuleId;})) openDocRuleId=DOC_RULES[0].id;
+  if(!DOC_RULES.some(function(rule){return rule.id===openDocRuleId;})){
+    var firstRule=DOC_RULES[0];
+    openDocRuleId=firstRule?firstRule.id:null;
+  }
   c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule,rule.id===openDocRuleId);}).join('');
 }
 
@@ -1689,7 +1692,10 @@ function addDocRule(){
 function delDocRule(ri){
   if(!confirm('Delete this rule?'))return;
   var removed=DOC_RULES.splice(ri,1)[0];
-  if(removed&&removed.id===openDocRuleId){var fallback=DOC_RULES[Math.max(0,ri-1)];openDocRuleId=fallback?fallback.id:null;}
+  if(removed&&removed.id===openDocRuleId){
+    var fallback=DOC_RULES[Math.max(0,ri-1)];
+    openDocRuleId=fallback?fallback.id:null;
+  }
   saveData();renderDocRules();
 }
 function setDocRuleLabel(ri,val){
