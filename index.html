@@ -366,9 +366,16 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-rules-title{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--darkred);margin-bottom:4px}
 .doc-rules-subtitle{font-size:12px;color:var(--ink3);line-height:1.5}
 .doc-rule-row{border-top:1.5px solid var(--border);overflow:hidden}
-.doc-rule-hdr{background:var(--paper2);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.doc-rule-hdr{background:var(--paper2);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;user-select:none}
+.doc-rule-main{display:flex;align-items:center;gap:10px;min-width:0}
 .doc-rule-num{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--darkred)}
-.doc-rule-body{padding:16px;background:#fff}
+.doc-rule-name-preview{font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.doc-rule-arrow{font-size:12px;color:var(--ink3);transition:transform .25s}
+.doc-rule-hdr.open .doc-rule-arrow{transform:rotate(180deg)}
+.doc-rule-body-wrap{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.doc-rule-body-wrap.open{max-height:4000px;transition:max-height .5s ease}
+.doc-rule-body{padding:16px;background:#fff;border-top:1px solid rgba(80,10,10,.08)}
+.doc-rule-label-row{margin-bottom:12px}
 .doc-rule-docs{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .doc-rule-docs-hdr{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:10px}
 .doc-rules-empty{font-size:13px;color:var(--ink3);font-style:italic;padding:20px 16px;text-align:center}
@@ -928,6 +935,7 @@ function toggleDocLib(){var wrap=document.getElementById('doc-lib-body-wrap'),ar
 
 /* ===== ACCORDION ===== */
 var openAccordionId=null;
+var openDocRuleId=null;
 function toggleAccordion(sid){
   document.querySelectorAll('.editor-block').forEach(function(block){
     var bsid=block.id.replace('block-','');
@@ -945,6 +953,22 @@ function openAccordion(sid){
     var open=(bsid===sid);bw.classList.toggle('open',open);hdr.classList.toggle('open',open);
   });
   openAccordionId=sid;
+}
+function toggleDocRuleAccordion(rid){
+  document.querySelectorAll('.doc-rule-row').forEach(function(row){
+    var rrid=row.dataset.rid;
+    var hdr=row.querySelector('.doc-rule-hdr'),bw=row.querySelector('.doc-rule-body-wrap');
+    if(!hdr||!bw) return;
+    if(rrid===rid){
+      var isOpen=bw.classList.contains('open');
+      bw.classList.toggle('open',!isOpen);
+      hdr.classList.toggle('open',!isOpen);
+      openDocRuleId=isOpen?null:rid;
+    } else {
+      bw.classList.remove('open');
+      hdr.classList.remove('open');
+    }
+  });
 }
 
 /* ===== EDITOR ===== */
@@ -1623,19 +1647,23 @@ function buildDocRuleConditionsUI(ri,rule){
     +'</div>';
 }
 
-function buildDocRuleRow(ri,rule){
+function buildDocRuleRow(ri,rule,isOpen){
   var condsHtml=buildDocRuleConditionsUI(ri,rule);
   var docsHtml=buildDocPicker('rule','rules',ri,null,rule.docs||[]);
-  return '<div class="doc-rule-row" id="doc-rule-row-'+ri+'">'
-    +'<div class="doc-rule-hdr">'
-    +'<span class="doc-rule-num">Rule '+(ri+1)+'</span>'
-    +'<button class="btn btn-danger btn-sm" data-action="delDocRule" data-ri="'+ri+'">Delete</button>'
+  var rid=rule.id||('ri'+ri),label=(rule.label||'').trim();
+  return '<div class="doc-rule-row" id="doc-rule-row-'+ri+'" data-rid="'+escA(rid)+'">'
+    +'<div class="doc-rule-hdr'+(isOpen?' open':'')+'" data-action="toggleDocRule" data-rid="'+escA(rid)+'">'
+    +'<div class="doc-rule-main"><span class="doc-rule-num">Rule '+(ri+1)+'</span>'+(label?'<span class="doc-rule-name-preview">'+esc(label)+'</span>':'')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px"><button class="btn btn-danger btn-sm" data-action="delDocRule" data-ri="'+ri+'">Delete</button><span class="doc-rule-arrow">&#9660;</span></div>'
     +'</div>'
+    +'<div class="doc-rule-body-wrap'+(isOpen?' open':'')+'">'
     +'<div class="doc-rule-body">'
+    +'<div class="doc-rule-label-row"><label class="field-label">Rule label <span style="font-weight:400;color:var(--ink3)">&mdash; internal only (not shown to users)</span></label><input class="field-input" type="text" data-action="setDocRuleLabel" data-ri="'+ri+'" value="'+escA(rule.label||'')+'" placeholder="e.g., Intra-company transfer documents"></div>'
     +condsHtml
     +'<div class="doc-rule-docs">'
     +'<div class="doc-rule-docs-hdr">&#128206; Documents to include when conditions are met</div>'
     +'<div class="doc-picker-wrap" style="background:transparent;border-top:none;padding:0">'+docsHtml+'</div>'
+    +'</div>'
     +'</div>'
     +'</div>'
     +'</div>';
@@ -1644,19 +1672,43 @@ function buildDocRuleRow(ri,rule){
 function renderDocRules(){
   var c=document.getElementById('doc-rules-list'); if(!c) return;
   if(DOC_RULES.length===0){
+    openDocRuleId=null;
     c.innerHTML='<div class="doc-rules-empty">No rules yet. Click &ldquo;+ Add rule&rdquo; to create one.</div>';
     return;
   }
-  c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule);}).join('');
+  var touched=false;
+  DOC_RULES.forEach(function(rule){
+    if(!rule.id){rule.id=nextRuleId();touched=true;}
+    if(typeof rule.label!=='string'){rule.label=String(rule.label||'');touched=true;}
+    if(!Array.isArray(rule.conditions)){rule.conditions=[];touched=true;}
+    if(!Array.isArray(rule.docs)){rule.docs=[];touched=true;}
+  });
+  if(touched) saveData();
+  if(!DOC_RULES.some(function(rule){return rule.id===openDocRuleId;})){
+    var firstRule=DOC_RULES[0];
+    openDocRuleId=firstRule?firstRule.id:null;
+  }
+  c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule,rule.id===openDocRuleId);}).join('');
 }
 
 function addDocRule(){
-  DOC_RULES.push({id:nextRuleId(),conditions:[],docs:[]});
+  var rule={id:nextRuleId(),label:'',conditions:[],docs:[]};
+  DOC_RULES.push(rule);openDocRuleId=rule.id;
   saveData();renderDocRules();
 }
 function delDocRule(ri){
   if(!confirm('Delete this rule?'))return;
-  DOC_RULES.splice(ri,1);saveData();renderDocRules();
+  var removed=DOC_RULES.splice(ri,1)[0];
+  if(removed&&removed.id===openDocRuleId){
+    var fallback=ri>0?DOC_RULES[ri-1]:DOC_RULES[0];
+    openDocRuleId=fallback?fallback.id:null;
+  }
+  saveData();renderDocRules();
+}
+function setDocRuleLabel(ri,val){
+  var rule=DOC_RULES[ri]; if(!rule) return;
+  rule.label=val;
+  saveData();
 }
 function addRuleCond(ri){
   var rule=DOC_RULES[ri]; if(!rule) return;
@@ -1697,6 +1749,8 @@ function setRuleCondVal(ri,ci,val){
 
 /* ===== EVENT DELEGATION ===== */
 document.addEventListener('click',function(e){
+  var drh=e.target.closest('.doc-rule-hdr[data-action="toggleDocRule"]');
+  if(drh&&!e.target.closest('button')){toggleDocRuleAccordion(drh.dataset.rid);return;}
   var hdr=e.target.closest('.block-hdr[data-action="accordion"]');
   if(hdr&&!e.target.closest('button')){toggleAccordion(hdr.dataset.sid);return;}
   var trigger=e.target.closest('.doc-picker-trigger[data-action="toggleDropdown"]');
@@ -1791,6 +1845,8 @@ document.addEventListener('input',function(e){
   if(tgd){updateGrpDropItems(tgd.dataset.sid,parseInt(tgd.dataset.gdi),tgd.value);return;}
   var ugd=e.target.closest('input[data-action="upGrpDrop"]');
   if(ugd){upGrpDrop(ugd.dataset.sid,parseInt(ugd.dataset.gdi),ugd.dataset.field,ugd.value);return;}
+  var rl=e.target.closest('input[data-action="setDocRuleLabel"]');
+  if(rl){setDocRuleLabel(parseInt(rl.dataset.ri),rl.value);return;}
   var df=e.target.closest('[data-action="setDocField"]');
   if(df){setDocField(df.dataset.ctx,df.dataset.sid,df.dataset.oi,df.dataset.gi,parseInt(df.dataset.di),df.dataset.field,df.value);return;}
   /* Library field — update DOCLIB directly without rebuilding anything */
