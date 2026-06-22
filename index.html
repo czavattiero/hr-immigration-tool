@@ -447,6 +447,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
         <div class="output-hdr-btns">
           <button class="copy-btn" id="copy-text-btn" onclick="copyOutputText()">Copy plain text</button>
           <button class="copy-btn" id="copy-html-btn" onclick="copyOutputHTML()">Copy formatted</button>
+          <button class="copy-btn" id="send-email-btn" onclick="sendDigestEmail()">Send email</button>
         </div>
       </div>
       <div class="docs-prompt" id="docs-prompt">
@@ -908,12 +909,7 @@ function renderOutput(){
 }
 
 function copyOutputText(){
-  var parts=[];
-  DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(s.text));}
-    else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(htmlToText(o.output));}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var t=io?io.text:(gd.output||'');if(t) parts.push(htmlToText(t));});}
-  });
+  var parts=collectSelectedOutputTextParts();
   navigator.clipboard.writeText(parts.join('\n\n')).then(function(){var b=document.getElementById('copy-text-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy plain text';},2000);});
 }
 function copyOutputHTML(){
@@ -926,6 +922,70 @@ function copyOutputHTML(){
   var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
+}
+var DIGEST_EMAIL_TO_KEY='digest_email_to';
+var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
+function isValidEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());}
+function getDigestEmailRecipient(){
+  var saved='';
+  try{saved=(localStorage.getItem(DIGEST_EMAIL_TO_KEY)||'').trim();}catch(e){}
+  var to=saved||(prompt('Recipient email address','')||'').trim();
+  if(!to) return null;
+  if(!isValidEmail(to)){showToast('Enter a valid email address');return null;}
+  try{localStorage.setItem(DIGEST_EMAIL_TO_KEY,to);}catch(e){}
+  return to;
+}
+function collectSelectedOutputTextParts(){
+  var parts=[];
+  DATA.forEach(function(s){
+    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(s.text));}
+    else if(s.type==='dynamic'){
+      var i=answers[s.id];
+      if(i!=null){
+        var o=s.options[i];
+        if(o&&o.output) parts.push(htmlToText(o.output));
+      }
+    } else if(s.type==='grouped'){
+      (s.dropdowns||[]).forEach(function(gd,gdi){
+        var key=s.id+'__'+gdi;
+        var cn=answers[key];
+        if(!cn) return;
+        var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
+        var t=io?io.text:(gd.output||'');
+        if(t) parts.push(htmlToText(t));
+      });
+    }
+  });
+  return parts;
+}
+function sendDigestEmail(){
+  var recipient=getDigestEmailRecipient();
+  if(!recipient){showToast('Recipient email is required');return;}
+  var parts=collectSelectedOutputTextParts(),docs=[];
+  DOC_RULES.forEach(function(rule){
+    if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
+  });
+  if(parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
+  var lines=[];
+  if(parts.length>0) lines.push(parts.join('\n\n'));
+  if(docs.length>0){
+    lines.push('', 'Documents to attach:');
+    docs.forEach(function(d,idx){
+      var docName=d.name||(d.path?d.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+      var detail=d.url?('Link: '+d.url):(d.path?('File path: '+d.path):'Locate manually');
+      lines.push('- '+docName+' ('+detail+')');
+    });
+    lines.push('', 'If files are not linked, attach them manually before sending.');
+  }
+  var subject=DIGEST_EMAIL_SUBJECT;
+  var body=lines.join('\n');
+  var gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(recipient)+'&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  var gmailWindow=null;
+  try{gmailWindow=window.open(gmailUrl,'_blank','noopener');}catch(e){}
+  if(!gmailWindow||gmailWindow.closed||typeof gmailWindow.closed==='undefined'){
+    showToast('Gmail pop-up blocked — opening default mail app');
+    window.location.href='mailto:'+encodeURIComponent(recipient)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  }
 }
 function resetForm(){answers={};renderIntake();}
 
