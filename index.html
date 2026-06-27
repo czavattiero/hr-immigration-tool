@@ -1047,32 +1047,38 @@ function sanitizeHtmlForEmail(html){
 }
 function simplifyHtmlForOutlook(html){
   var sourceHtml=typeof html==='string'?html:String(html||'');
+  var NBSP='\u00a0'; // non-breaking space (U+00A0)
   var sanitized=sanitizeHtmlForEmail(sourceHtml);
   // Use DOM to convert div blocks into paragraph elements, preserving their inline styles and children.
   // This gives proper paragraph spacing in email clients instead of the cramped <br> separators.
   var wrap=document.createElement('div');
   wrap.innerHTML=sanitized;
-  (function convertDivsToP(node){
-    Array.from(node.children).forEach(function(child){
-      convertDivsToP(child);
-      if(child.tagName==='DIV'){
-        var p=document.createElement('p');
-        Array.from(child.attributes).forEach(function(a){p.setAttribute(a.name,a.value);});
-        while(child.firstChild) p.appendChild(child.firstChild);
-        child.parentNode.replaceChild(p,child);
-      }
+  // Convert all div elements to p elements for proper paragraph spacing in email clients.
+  // Iterate in reverse document order so the deepest (innermost) divs are replaced first.
+  Array.from(wrap.querySelectorAll('div')).reverse().forEach(function(div){
+    var p=document.createElement('p');
+    Array.from(div.attributes).forEach(function(a){p.setAttribute(a.name,a.value);});
+    while(div.firstChild) p.appendChild(div.firstChild);
+    if(div.parentNode) div.parentNode.replaceChild(p,div);
+  });
+  // Remove empty paragraphs (containing only whitespace, line-breaks, or non-breaking spaces).
+  Array.from(wrap.querySelectorAll('p')).forEach(function(p){
+    var hasContent=Array.from(p.childNodes).some(function(n){
+      if(n.nodeType===Node.TEXT_NODE) return n.textContent.split(NBSP).join('').trim()!=='';
+      return n.nodeType===Node.ELEMENT_NODE&&n.tagName!=='BR';
     });
-  })(wrap);
-  // Add a bottom margin to every paragraph so spacing matches the tool output.
+    if(!hasContent) p.parentNode.removeChild(p);
+  });
+  // Add a bottom margin to every remaining paragraph so spacing matches the tool output.
+  // sanitizeHtmlForEmail strips all margin properties from user content, so the only time
+  // this check triggers is if a margin shorthand was set by code in this same function.
   Array.from(wrap.querySelectorAll('p')).forEach(function(p){
     var existing=p.getAttribute('style')||'';
-    if(existing.indexOf('margin')===-1){
+    if(!/\bmargin\s*:/.test(existing)){
       p.setAttribute('style',(existing?existing+'; ':'')+'margin: 0 0 0.5em 0;');
     }
   });
   return String(wrap.innerHTML||'')
-    // Remove empty paragraph wrappers that add noise and inflate the URL.
-    .replace(/<p[^>]*>\s*(<br\s*\/?>|&nbsp;|\s)*<\/p>/gi,'')
     // Collapse excessive blank lines so large emails still fit in Outlook compose URLs more often.
     .replace(/(\s*<br\s*\/?>\s*){3,}/gi,'<br><br>')
     .trim();
@@ -1180,8 +1186,10 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   }
   // Always copy the formatted HTML to clipboard so the user can paste it with Ctrl+V if Outlook
   // strips inline styles (colours, highlights) from the compose URL body parameter.
+  var copySuccessMessage=(successMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
+  var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
   writeFormattedClipboard(htmlBody,plainBody).then(function(){
-    finishOpening(outlookUrl,successMessage+' Formatted email also copied \u2014 paste with Ctrl+V if formatting is missing.','Allow pop-ups and try again. Formatted email copied to clipboard.');
+    finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
   }).catch(function(){
     if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
       finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
