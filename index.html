@@ -958,11 +958,18 @@ var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer 
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
-var EMAIL_ALLOWED_TAGS={P:1,BR:1,STRONG:1,B:1,EM:1,I:1,U:1,SPAN:1,DIV:1,UL:1,OL:1,LI:1,A:1,FONT:1};
-var EMAIL_ALLOWED_STYLE_PROPS={color:1,'background-color':1,'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1};
+var EMAIL_SANITIZER_ALLOWED_TAGS={P:1,BR:1,STRONG:1,B:1,EM:1,I:1,U:1,SPAN:1,DIV:1,UL:1,OL:1,LI:1,A:1,FONT:1};
+var EMAIL_SANITIZER_ALLOWED_STYLE_PROPS={color:1,'background-color':1,'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1};
 function sanitizeEmailColor(value){
   var v=String(value||'').trim();
   if(/^#[0-9a-f]{3,8}$/i.test(v)||/^rgba?\([^()]+\)$/i.test(v)||/^[a-z]+$/i.test(v)) return v;
+  return '';
+}
+function sanitizeEmailStyleValue(prop,value){
+  if(prop==='color'||prop==='background-color') return sanitizeEmailColor(value);
+  if(prop==='font-weight'&&/^(normal|bold|bolder|lighter|[1-9]00)$/i.test(value)) return value;
+  if(prop==='font-style'&&/^(normal|italic|oblique)$/i.test(value)) return value;
+  if((prop==='text-decoration'||prop==='text-decoration-line')&&/^(none|underline|line-through|overline)(\s+(underline|line-through|overline))*$/i.test(value)) return value;
   return '';
 }
 function sanitizeEmailStyle(styleText){
@@ -971,9 +978,9 @@ function sanitizeEmailStyle(styleText){
     if(idx===-1) return '';
     var prop=rule.slice(0,idx).trim().toLowerCase();
     var value=rule.slice(idx+1).trim();
-    if(!EMAIL_ALLOWED_STYLE_PROPS[prop]||!value) return '';
-    if((prop==='color'||prop==='background-color')&&!sanitizeEmailColor(value)) return '';
-    return prop+': '+value;
+    if(!EMAIL_SANITIZER_ALLOWED_STYLE_PROPS[prop]||!value) return '';
+    var safeValue=sanitizeEmailStyleValue(prop,value);
+    return safeValue?(prop+': '+safeValue):'';
   }).filter(Boolean).join('; ');
 }
 function sanitizeHtmlForEmail(html){
@@ -983,7 +990,7 @@ function sanitizeHtmlForEmail(html){
     Array.from(node.children).forEach(function(child){
       clean(child);
       var tag=child.tagName;
-      if(!EMAIL_ALLOWED_TAGS[tag]){
+      if(!EMAIL_SANITIZER_ALLOWED_TAGS[tag]){
         if(tag==='SCRIPT'||tag==='STYLE'){child.remove();return;}
         while(child.firstChild) node.insertBefore(child.firstChild,child);
         child.remove();
@@ -1043,11 +1050,11 @@ function buildEmailDocsHtml(docs){
     +'</ul><p style="margin:0">Attach the documents listed above before sending.</p></div>';
 }
 function writeFormattedClipboard(html,plain){
-  if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Clipboard HTML unsupported'));
+  if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
   return navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([plain],{type:'text/plain'})})]);
 }
 function writePlainClipboard(text){
-  if(!navigator.clipboard||!navigator.clipboard.writeText) return Promise.reject(new Error('Clipboard text unsupported'));
+  if(!navigator.clipboard||!navigator.clipboard.writeText) return Promise.reject(new Error('Your browser does not support clipboard operations.'));
   return navigator.clipboard.writeText(text);
 }
 function collectSelectedOutputTextParts(){
