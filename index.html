@@ -1021,6 +1021,10 @@ function copyOutputHTML(){
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
 var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
+var EMAIL_ATTACHMENT_REMINDER_BG='#FFF3CC';
+var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
+var OUTLOOK_DRAFT_WINDOW_NAME='outlook-draft-window';
+var OUTLOOK_DRAFT_WINDOW_FEATURES='popup=yes,width=1080,height=820,noopener';
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -1112,11 +1116,11 @@ function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
   var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
-    '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:#FFF3CC;color:'+EMAIL_TEXT_COLOR+';">',
+    '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:'+EMAIL_ATTACHMENT_REMINDER_BG+';color:'+EMAIL_TEXT_COLOR+';">',
       '<p style="margin:0 0 8px 0;"><strong>Attachment reminder</strong></p>',
       '<p style="margin:0 0 8px 0;">Please attach the required documents before you send this email in Outlook.</p>',
       items,
-      '<p style="margin:0;background-color:#ffef99;display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p>',
+      '<p style="margin:0;background-color:'+EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG+';display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p>',
     '</div>'
   ].join('');
 }
@@ -1142,7 +1146,8 @@ function buildDigestEmailText(parts,docs){
   return sections.join('\n\n');
 }
 function buildOutlookComposeUrl(emailSubject,htmlBody){
-  return 'https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(htmlBody);
+  var params=new URLSearchParams({subject:emailSubject,body:htmlBody});
+  return 'https://outlook.office.com/mail/deeplink/compose?'+params.toString();
 }
 function buildDocsAttachmentPromptHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
@@ -1207,7 +1212,7 @@ function sendFromEmailPreview(){
   var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
   var sendBtn=document.getElementById('email-preview-send-btn');
   if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
-  var popupWindow=window.open(outlookUrl,'outlook-draft-window','popup=yes,width=1080,height=820,noopener');
+  var popupWindow=window.open(outlookUrl,OUTLOOK_DRAFT_WINDOW_NAME,OUTLOOK_DRAFT_WINDOW_FEATURES);
   if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
   closeEmailPreviewModal();
   if(!popupWindow){
