@@ -1239,8 +1239,7 @@ function confirmDocsAttachment(attached){
   if(attached&&action){action();}
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
-function downloadEmailEml(emailSubject,htmlBody,plainBody){
-  var boundary='eml_boundary_'+Date.now();
+function downloadEmailEml(emailSubject,htmlBody){
   var safeFilename=emailSubject.substring(0,100).replace(/[\\/:*?"<>|]/g,'_');
   // Wrap the HTML in a full document with an embedded style for paragraph spacing.
   // Outlook desktop honours both the embedded style and the existing inline styles.
@@ -1256,24 +1255,15 @@ function downloadEmailEml(emailSubject,htmlBody,plainBody){
     '</body>',
     '</html>'
   ].join('\r\n');
+  // Single-part HTML email: Outlook opens the .eml file as a draft with full HTML
+  // formatting preserved — no multipart boundary needed.
   var emlLines=[
     'MIME-Version: 1.0',
     'Subject: '+emailSubject,
-    'Content-Type: multipart/alternative; boundary="'+boundary+'"',
-    '',
-    '--'+boundary,
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 8bit',
-    '',
-    plainBody,
-    '',
-    '--'+boundary,
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
     '',
-    fullHtml,
-    '',
-    '--'+boundary+'--'
+    fullHtml
   ];
   var blob=new Blob([emlLines.join('\r\n')],{type:'application/octet-stream'});
   var url=URL.createObjectURL(blob);
@@ -1307,7 +1297,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   // the browser does not support Blob URLs (extremely unlikely in modern browsers).
   function openWithEml(){
     try {
-      downloadEmailEml(emailSubject,htmlBody,plainBody);
+      downloadEmailEml(emailSubject,htmlBody);
       restoreBtn();
       showToast(emlSuccessMessage);
     } catch(emlErr){
