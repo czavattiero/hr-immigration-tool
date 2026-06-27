@@ -1048,7 +1048,7 @@ function simplifyHtmlForOutlook(html){
     .replace(/<\/div>\s*<div>/gi,'<br>')
     .replace(/<div>/gi,'')
     .replace(/<\/div>/gi,'')
-    .replace(/<p>\s*(<br\s*\/?>|\&nbsp;|\s)*<\/p>/gi,'')
+    .replace(/<p>\s*(<br\s*\/?>|&nbsp;|\s)*<\/p>/gi,'')
     .replace(/(\s*<br\s*\/?>\s*){3,}/gi,'<br><br>')
     .trim();
 }
@@ -1135,12 +1135,12 @@ function confirmDocsAttachment(attached){
   if(attached&&action){action();}
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
-function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,triggerBtn){
+function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   var plainBody=buildDigestEmailText(parts,docs);
   var htmlBody=buildDigestEmailHtml(htmlParts,docs);
   var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
   var successMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
-  var restoreBtn=setButtonPending(triggerBtn,'Opening\u2026');
+  var restoreBtn=setButtonPending(sendButton,'Opening\u2026');
   function finishOpening(url,message,blockedMessage){
     var draftWindow=window.open(url,'_blank','noopener');
     restoreBtn();
