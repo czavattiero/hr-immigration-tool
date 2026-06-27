@@ -923,18 +923,8 @@ function copyOutputHTML(){
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
-var DIGEST_EMAIL_TO_KEY='digest_email_to';
+var DIGEST_EMAIL_FROM='hrimmigration@ucalgary.ca';
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
-function isValidEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());}
-function getDigestEmailRecipient(){
-  var saved='';
-  try{saved=(localStorage.getItem(DIGEST_EMAIL_TO_KEY)||'').trim();}catch(e){}
-  var to=saved||(prompt('Recipient email address','')||'').trim();
-  if(!to) return null;
-  if(!isValidEmail(to)){showToast('Enter a valid email address');return null;}
-  try{localStorage.setItem(DIGEST_EMAIL_TO_KEY,to);}catch(e){}
-  return to;
-}
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
@@ -959,8 +949,6 @@ function collectSelectedOutputTextParts(){
   return parts;
 }
 function sendDigestEmail(){
-  var recipient=getDigestEmailRecipient();
-  if(!recipient){showToast('Recipient email is required');return;}
   var parts=collectSelectedOutputTextParts(),docs=[];
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
@@ -975,17 +963,11 @@ function sendDigestEmail(){
       var detail=d.url?('Link: '+d.url):(d.path?('File path: '+d.path):'Locate manually');
       lines.push('- '+docName+' ('+detail+')');
     });
-    lines.push('', 'If files are not linked, attach them manually before sending.');
+    lines.push('', 'Attach the documents listed above before sending.');
   }
-  var subject=DIGEST_EMAIL_SUBJECT;
   var body=lines.join('\n');
-  var gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(recipient)+'&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-  var gmailWindow=null;
-  try{gmailWindow=window.open(gmailUrl,'_blank','noopener');}catch(e){}
-  if(!gmailWindow||gmailWindow.closed||typeof gmailWindow.closed==='undefined'){
-    showToast('Gmail pop-up blocked — opening default mail app');
-    window.location.href='mailto:'+encodeURIComponent(recipient)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-  }
+  window.location.href='mailto:?subject='+encodeURIComponent(DIGEST_EMAIL_SUBJECT)+'&body='+encodeURIComponent(body);
+  showToast('Draft email opened \u2014 select '+DIGEST_EMAIL_FROM+' as the sender before sending');
 }
 function resetForm(){answers={};renderIntake();}
 
