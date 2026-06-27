@@ -1026,7 +1026,10 @@ function sanitizeHtmlForEmail(html){
       var safeStyle=sanitizeEmailStyle(rawStyle);
       if(tag==='FONT'&&rawColor){
         var safeColor=sanitizeEmailColor(rawColor);
-        if(safeColor) safeStyle=(safeStyle?safeStyle+'; ':'')+'color: '+safeColor;
+        if(safeColor){
+          safeStyle=(safeStyle?safeStyle+'; ':'')+'color: '+safeColor;
+          child.setAttribute('color',safeColor);
+        }
       }
       if(safeStyle) child.setAttribute('style',safeStyle);
       if(tag==='A'&&rawHref){
@@ -1044,17 +1047,38 @@ function sanitizeHtmlForEmail(html){
 }
 function simplifyHtmlForOutlook(html){
   var sourceHtml=typeof html==='string'?html:String(html||'');
-  return String(sanitizeHtmlForEmail(sourceHtml)||'')
-    // Order matters: normalize empty div placeholders first, then sibling boundaries, then strip wrappers.
-    // Turn empty div placeholders into a single break first so blank editor lines are preserved.
-    .replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi,'<br>')
-    // Convert sibling div boundaries into line breaks before stripping the remaining wrappers.
-    .replace(/<\/div>\s*<div>/gi,'<br>')
-    // Remove any leftover div wrappers after their spacing has been normalized.
-    .replace(/<div>/gi,'')
-    .replace(/<\/div>/gi,'')
-    // Remove empty paragraph wrappers that otherwise add noise and inflate the URL.
-    .replace(/<p>\s*(<br\s*\/?>|&nbsp;|\s)*<\/p>/gi,'')
+  var NBSP='\u00a0'; // non-breaking space (U+00A0)
+  var sanitized=sanitizeHtmlForEmail(sourceHtml);
+  // Use DOM to convert div blocks into paragraph elements, preserving their inline styles and children.
+  // This gives proper paragraph spacing in email clients instead of the cramped <br> separators.
+  var wrap=document.createElement('div');
+  wrap.innerHTML=sanitized;
+  // Convert all div elements to p elements for proper paragraph spacing in email clients.
+  // Iterate in reverse document order so the deepest (innermost) divs are replaced first.
+  Array.from(wrap.querySelectorAll('div')).reverse().forEach(function(div){
+    var p=document.createElement('p');
+    Array.from(div.attributes).forEach(function(a){p.setAttribute(a.name,a.value);});
+    while(div.firstChild) p.appendChild(div.firstChild);
+    if(div.parentNode) div.parentNode.replaceChild(p,div);
+  });
+  // Remove empty paragraphs (containing only whitespace, line-breaks, or non-breaking spaces).
+  Array.from(wrap.querySelectorAll('p')).forEach(function(p){
+    var hasContent=Array.from(p.childNodes).some(function(n){
+      if(n.nodeType===Node.TEXT_NODE) return n.textContent.split(NBSP).join('').trim()!=='';
+      return n.nodeType===Node.ELEMENT_NODE&&n.tagName!=='BR';
+    });
+    if(!hasContent) p.parentNode.removeChild(p);
+  });
+  // Add a bottom margin to every remaining paragraph so spacing matches the tool output.
+  // sanitizeHtmlForEmail strips all margin properties from user content, so the only time
+  // this check triggers is if a margin shorthand was set by code in this same function.
+  Array.from(wrap.querySelectorAll('p')).forEach(function(p){
+    var existing=p.getAttribute('style')||'';
+    if(!/\bmargin\s*:/.test(existing)){
+      p.setAttribute('style',(existing?existing+'; ':'')+'margin: 0 0 0.5em 0;');
+    }
+  });
+  return String(wrap.innerHTML||'')
     // Collapse excessive blank lines so large emails still fit in Outlook compose URLs more often.
     .replace(/(\s*<br\s*\/?>\s*){3,}/gi,'<br><br>')
     .trim();
@@ -1160,15 +1184,19 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
     if(message) showToast(message);
     return true;
   }
-  if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
-    writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(outlookUrl,'Outlook draft opened. The formatted email was also copied as a backup because the draft is large.','Allow pop-ups and try again. A formatted backup will be copied if needed.');
-    }).catch(function(){
-      finishOpening(outlookUrl,'Outlook draft opened. Clipboard backup was unavailable, so review the draft body after Outlook opens.','Allow pop-ups and try again.');
-    });
-    return;
-  }
-  finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
+  // Always copy the formatted HTML to clipboard so the user can paste it with Ctrl+V if Outlook
+  // strips inline styles (colours, highlights) from the compose URL body parameter.
+  var copySuccessMessage=(successMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
+  var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
+  writeFormattedClipboard(htmlBody,plainBody).then(function(){
+    finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
+  }).catch(function(){
+    if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
+      finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
+    } else {
+      finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
+    }
+  });
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
