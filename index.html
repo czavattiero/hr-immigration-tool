@@ -388,6 +388,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-rule-docs-hdr{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:10px}
 .doc-rules-empty{font-size:13px;color:var(--ink3);font-style:italic;padding:20px 16px;text-align:center}
 </style>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -600,6 +601,76 @@ function sbWrite(key,value){
       throw new Error('Status '+r.status+': '+t);
     });
     return r.json();
+  });
+}
+
+/* ===== MICROSOFT GRAPH (MAIL DRAFT) CONFIG =====
+   To enable rich-HTML Outlook drafts, register an Azure AD single-page application and fill in the
+   values below.  The app needs the "Mail.ReadWrite" delegated permission.
+   Leave both values blank to use the URL + clipboard fallback instead.
+   Note: GRAPH_CLIENT_ID and GRAPH_TENANT_ID are public OAuth2 client-configuration values
+   (not secrets) — it is normal for them to appear in client-side code. */
+var GRAPH_CLIENT_ID='';   // Azure AD app client (application) ID, e.g. 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+var GRAPH_TENANT_ID='';   // Directory (tenant) ID, or 'common' / 'organizations' for multi-tenant
+var GRAPH_MAIL_SCOPE='https://graph.microsoft.com/Mail.ReadWrite';
+
+var msalInstance=null;
+function getMsalInstance(){
+  if(!GRAPH_CLIENT_ID||!GRAPH_TENANT_ID) return null;
+  if(!msalInstance&&typeof msal!=='undefined'&&typeof msal.PublicClientApplication==='function'){
+    msalInstance=new msal.PublicClientApplication({
+      auth:{clientId:GRAPH_CLIENT_ID,authority:'https://login.microsoftonline.com/'+GRAPH_TENANT_ID},
+      cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:false}
+    });
+  }
+  return msalInstance;
+}
+function getGraphToken(){
+  var msalApp=getMsalInstance();
+  if(!msalApp) return Promise.reject(new Error('Graph not configured'));
+  var accounts=msalApp.getAllAccounts();
+  if(accounts.length>0){
+    return msalApp.acquireTokenSilent({scopes:[GRAPH_MAIL_SCOPE],account:accounts[0]})
+      .catch(function(silentErr){
+        console.warn('MSAL silent token acquisition failed, falling back to popup:',silentErr);
+        showToast('Microsoft sign-in required to create formatted draft\u2026');
+        return msalApp.acquireTokenPopup({scopes:[GRAPH_MAIL_SCOPE]});
+      });
+  }
+  return msalApp.acquireTokenPopup({scopes:[GRAPH_MAIL_SCOPE]});
+}
+function handleGraphErrorResponse(r){
+  // Use two-argument .then() so the rejection handler only fires when r.json() itself fails,
+  // keeping each case distinct and avoiding the need to re-detect already-thrown errors.
+  return r.json().then(
+    function(errJson){
+      var msg=(errJson&&errJson.error&&errJson.error.message)||'Unknown error';
+      console.error('Graph API error',r.status,errJson);
+      throw new Error('Graph API error '+r.status+': '+msg);
+    },
+    function(){
+      console.error('Graph API error',r.status,'(non-JSON response)');
+      throw new Error('Graph API error '+r.status);
+    }
+  );
+}
+function createMailDraftViaGraph(subject,htmlBody){
+  return getGraphToken().then(function(tokenResponse){
+    return fetch('https://graph.microsoft.com/v1.0/me/mailFolders/Drafts/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tokenResponse.accessToken},
+      body:JSON.stringify({subject:subject,body:{contentType:'HTML',content:htmlBody}})
+    }).then(function(r){
+      if(!r.ok) return handleGraphErrorResponse(r);
+      return r.json();
+    }).then(function(draft){
+      // Prefer webLink — it is always returned by Graph and opens the saved draft correctly.
+      if(draft.webLink) return draft.webLink;
+      // This path is only reached if Graph omits webLink, which should not happen in practice.
+      // Fall back to constructing the compose URL from the message id.
+      if(!draft.id) throw new Error('Graph API returned a draft with no id or webLink');
+      return 'https://outlook.office.com/mail/deeplink/compose?messageId='+encodeURIComponent(draft.id);
+    });
   });
 }
 
@@ -1184,19 +1255,35 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
     if(message) showToast(message);
     return true;
   }
-  // Always copy the formatted HTML to clipboard so the user can paste it with Ctrl+V if Outlook
-  // strips inline styles (colours, highlights) from the compose URL body parameter.
-  var copySuccessMessage=(successMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
-  var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
-  writeFormattedClipboard(htmlBody,plainBody).then(function(){
-    finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
-  }).catch(function(){
-    if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
-      finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
-    } else {
-      finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
-    }
-  });
+  // Fallback: copy formatted HTML to clipboard and open via compose URL.
+  // Outlook may strip inline styles from the body URL parameter, so the clipboard
+  // copy lets users paste the fully-formatted version with Ctrl+V if needed.
+  function openWithFallback(){
+    var copySuccessMessage=(successMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
+    var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
+    writeFormattedClipboard(htmlBody,plainBody).then(function(){
+      finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
+    }).catch(function(){
+      if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
+        finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
+      } else {
+        finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
+      }
+    });
+  }
+  // Preferred path: create the draft via Microsoft Graph so Outlook renders the full
+  // HTML with all inline styles preserved.  Falls back gracefully if Graph is not
+  // configured or the API call fails for any reason.
+  if(GRAPH_CLIENT_ID&&GRAPH_TENANT_ID){
+    createMailDraftViaGraph(emailSubject,htmlBody).then(function(draftUrl){
+      finishOpening(draftUrl,successMessage,'Allow pop-ups and try again.');
+    }).catch(function(graphErr){
+      console.warn('Graph API draft creation failed, falling back to URL approach:',graphErr);
+      openWithFallback();
+    });
+  } else {
+    openWithFallback();
+  }
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
