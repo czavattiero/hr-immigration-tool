@@ -928,7 +928,11 @@ function copyOutputHTML(){
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
+/* Keep under common browser URL limits to reduce deeplink failures. */
 var MAX_OUTLOOK_URL_LENGTH=1800;
+function getDocDisplayName(doc,idx){
+  return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+}
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
@@ -964,7 +968,7 @@ function sendDigestEmail(){
   if(parts.length>0) lines.push(parts.join('\n\n'));
   if(docs.length>0){
     htmlLines.push('<br><br><strong>Documents to attach:</strong><ul>'+docs.map(function(d,idx){
-      var docName=d.name||(d.path?d.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+      var docName=getDocDisplayName(d,idx);
       var detail='Locate manually';
       if(d.url) detail='Link: <a href="'+escA(d.url)+'" target="_blank" rel="noopener">'+esc(d.url)+'</a>';
       else if(d.path) detail='File path: '+esc(d.path);
@@ -972,7 +976,7 @@ function sendDigestEmail(){
     }).join('')+'</ul><p>Attach the documents listed above before sending.</p>');
     lines.push('', 'Documents to attach:');
     docs.forEach(function(d,idx){
-      var docName=d.name||(d.path?d.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+      var docName=getDocDisplayName(d,idx);
       var detail=d.url?('Link: '+d.url):(d.path?('File path: '+d.path):'Locate manually');
       lines.push('- '+docName+' ('+detail+')');
     });
@@ -981,7 +985,8 @@ function sendDigestEmail(){
   var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
   var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
-  var encodedOutlookBody=encodeURIComponent(htmlBody||body);
+  var outlookBody=htmlBody.length>0?htmlBody:body;
+  var encodedOutlookBody=encodeURIComponent(outlookBody);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
   if(outlookUrl.length>MAX_OUTLOOK_URL_LENGTH){
     window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
