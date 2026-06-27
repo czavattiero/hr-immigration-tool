@@ -1024,8 +1024,8 @@ var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
 var EMAIL_ATTACHMENT_REMINDER_BG='#FFF3CC';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
 var OUTLOOK_DRAFT_WINDOW_FEATURES='popup=yes,width=1080,height=820,noopener=yes';
-// Keep rich-body compose URLs below a conservative size and fall back to clipboard for larger drafts.
-var OUTLOOK_COMPOSE_URL_MAX_CHARS=7000;
+// Keep compose URLs below a conservative size because large Outlook/browser URLs can fail silently.
+var OUTLOOK_COMPOSE_URL_MAX_BYTES=7000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -1154,6 +1154,10 @@ function buildOutlookSubjectOnlyUrl(emailSubject){
   var params=new URLSearchParams({subject:emailSubject});
   return 'https://outlook.office.com/mail/deeplink/compose?'+params.toString();
 }
+function getUrlSizeBytes(url){
+  if(typeof TextEncoder!=='undefined') return new TextEncoder().encode(String(url||'')).length;
+  return unescape(encodeURIComponent(String(url||''))).length;
+}
 function buildDocsAttachmentPromptHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
   var message='<p>Have you attached all required documents before sending this email?</p>';
@@ -1231,11 +1235,17 @@ function sendFromEmailPreview(){
     if(message) showToast(message);
     return true;
   }
-  if(outlookUrl.length>OUTLOOK_COMPOSE_URL_MAX_CHARS){
+  if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_URL_MAX_BYTES){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook; paste into the draft to keep formatting.','Outlook pop-up blocked. The email was copied, so allow pop-ups and try again.');
+      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook; paste into the draft to keep formatting.','Email copied. Allow pop-ups, click Open in Outlook again, and then paste into the draft.');
     }).catch(function(){
-      finishOpening('mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody),'Opened a plain-text draft because the formatted email was too large to open directly.','Outlook pop-up blocked, and the formatted fallback was unavailable.');
+      var mailtoUrl='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody);
+      if(getUrlSizeBytes(mailtoUrl)>OUTLOOK_COMPOSE_URL_MAX_BYTES){
+        if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
+        showToast('Draft is too large to open automatically, and clipboard access is unavailable. Use Copy formatted or Copy plain text instead.');
+        return;
+      }
+      finishOpening(mailtoUrl,'Opened a plain-text draft because the formatted email was too large to open directly.','Outlook pop-up blocked, and the formatted fallback was unavailable.');
     });
     return;
   }
