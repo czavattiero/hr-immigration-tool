@@ -529,6 +529,14 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escA(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function escT(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeHref(url){
+  if(!url) return '';
+  try{
+    var parsed=new URL(String(url),window.location.href);
+    if(parsed.protocol==='https:'||parsed.protocol==='mailto:') return parsed.href;
+  } catch(e){}
+  return '';
+}
 var toastT;
 function showToast(msg){var t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},2200);}
 
@@ -894,7 +902,8 @@ function renderOutput(){
         var icon=lk.indexOf('.pdf')>=0?'&#128196;':lk.indexOf('.doc')>=0?'&#128221;':'&#128206;';
         if(d.reminder){return '<div class="file-card reminder-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="reminder-badge">&#9888; Reminder</div><div class="file-card-name reminder-name">'+esc(nm)+'</div><div class="reminder-msg">Locate and attach this document manually before sending.</div></div></div>';}
         var ph=d.path?'<div class="file-card-path"><span class="file-card-path-label">File path</span><span class="file-card-path-value" id="fp-'+i+'">'+esc(d.path)+'</span><button class="copy-path-btn" data-target="fp-'+i+'">Copy path</button></div>':'';
-        var lh=d.url?'<div style="margin-top:6px"><a class="file-card-link" href="'+escA(d.url)+'" target="_blank" rel="noopener">Open / attach via Outlook</a></div>':'';
+        var safeUrl=safeHref(d.url);
+        var lh=safeUrl?'<div style="margin-top:6px"><a class="file-card-link" href="'+escA(safeUrl)+'" target="_blank" rel="noopener">Open / attach via Outlook</a></div>':'';
         return '<div class="file-card"><div class="file-card-icon">'+icon+'</div><div class="file-card-body"><div class="file-card-name">'+esc(nm)+'</div>'+ph+lh+'</div></div>';
       }).join('');
       dfl.querySelectorAll('.copy-path-btn').forEach(function(btn){
@@ -912,19 +921,27 @@ function copyOutputText(){
   var parts=collectSelectedOutputTextParts();
   navigator.clipboard.writeText(parts.join('\n\n')).then(function(){var b=document.getElementById('copy-text-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy plain text';},2000);});
 }
-function copyOutputHTML(){
+function collectSelectedOutputHtmlParts(){
   var parts=[];
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(s.text);}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(o.output);}}
     else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=io?io.text:(gd.output||'');if(h) parts.push(h);});}
   });
+  return parts;
+}
+function copyOutputHTML(){
+  var parts=collectSelectedOutputHtmlParts();
   var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
-var DIGEST_EMAIL_FROM='hrimmigration@ucalgary.ca';
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
+/* Use 1800 as a safety threshold below common ~2000+ browser URL limits for deeplinks. */
+var MAX_OUTLOOK_URL_LENGTH=1800;
+function getDocDisplayName(doc,idx){
+  return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+}
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
@@ -949,25 +966,50 @@ function collectSelectedOutputTextParts(){
   return parts;
 }
 function sendDigestEmail(){
-  var parts=collectSelectedOutputTextParts(),docs=[];
+  var htmlParts=collectSelectedOutputHtmlParts(),parts=collectSelectedOutputTextParts(),docs=[];
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
-  if(parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
+  if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
+  var htmlLines=[];
   var lines=[];
+  if(htmlParts.length>0) htmlLines.push(htmlParts.join('<br><br>'));
   if(parts.length>0) lines.push(parts.join('\n\n'));
   if(docs.length>0){
+    htmlLines.push('<br><br><strong>Documents to attach:</strong><ul>'+docs.map(function(d,idx){
+      var docName=getDocDisplayName(d,idx);
+      var detail='Locate manually';
+      var safeUrl=safeHref(d.url);
+      if(safeUrl) detail='Link: <a href="'+escA(safeUrl)+'" target="_blank" rel="noopener">'+esc(safeUrl)+'</a>';
+      else if(d.path) detail='File path: '+esc(d.path);
+      return '<li><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
+    }).join('')+'</ul><p>Attach the documents listed above before sending.</p>');
     lines.push('', 'Documents to attach:');
     docs.forEach(function(d,idx){
-      var docName=d.name||(d.path?d.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+      var docName=getDocDisplayName(d,idx);
       var detail=d.url?('Link: '+d.url):(d.path?('File path: '+d.path):'Locate manually');
       lines.push('- '+docName+' ('+detail+')');
     });
     lines.push('', 'Attach the documents listed above before sending.');
   }
+  var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
-  window.location.href='mailto:?subject='+encodeURIComponent(DIGEST_EMAIL_SUBJECT)+'&body='+encodeURIComponent(body);
-  showToast('Draft email opened \u2014 select '+DIGEST_EMAIL_FROM+' as the sender before sending');
+  var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
+  var draftBodyContent=htmlParts.length>0?htmlBody:body;
+  var encodedOutlookBody=encodeURIComponent(draftBodyContent);
+  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
+  if(outlookUrl.length>MAX_OUTLOOK_URL_LENGTH){
+    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
+    showToast('Email is too long for Outlook link. Opened your default mail app instead.');
+    return;
+  }
+  var popupWindow=window.open(outlookUrl,'_blank','noopener');
+  if(!popupWindow){
+    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
+    showToast('Outlook pop-up blocked. Opened your default mail app instead.');
+    return;
+  }
+  showToast('Outlook draft opened in a new tab');
 }
 function resetForm(){answers={};renderIntake();}
 
