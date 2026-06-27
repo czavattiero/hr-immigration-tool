@@ -1164,6 +1164,7 @@ function buildAttachmentReminderHtml(docs){
   var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
     '<p><strong>Attachment reminder</strong></p>',
+    '<p><strong><span style="color: red;">Delete this reminder before sending the email</span></strong></p>',
     '<p>Please attach the required documents before you send this email in Outlook.</p>',
     items,
     '<p><span style="background-color: '+EMAIL_REMINDER_HIGHLIGHT_BG+';"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></span></p>'
