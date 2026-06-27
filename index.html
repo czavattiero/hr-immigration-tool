@@ -969,7 +969,7 @@ function copyOutputHTML(){
   });
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
-var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
+var EMAIL_REMINDER_HIGHLIGHT_BG='#ffef99';
 // If the compose URL exceeds this conservative size, copy a formatted backup before opening Outlook directly.
 var OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES=7000;
 function getDocDisplayName(doc,idx){
@@ -1066,12 +1066,12 @@ function buildEmailHtmlFromParts(parts){
 }
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
-  var items=names.length?'<ul style="margin:8px 0 12px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
+  var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
     '<p><strong>Attachment reminder</strong></p>',
     '<p>Please attach the required documents before you send this email in Outlook.</p>',
     items,
-    '<p><span style="background-color: '+EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG+';"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></span></p>'
+    '<p><span style="background-color: '+EMAIL_REMINDER_HIGHLIGHT_BG+';"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></span></p>'
   ].join('');
 }
 function buildAttachmentReminderText(docs){
