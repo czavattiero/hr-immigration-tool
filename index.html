@@ -1024,6 +1024,7 @@ var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
 var EMAIL_ATTACHMENT_REMINDER_BG='#FFF3CC';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
 var OUTLOOK_DRAFT_WINDOW_FEATURES='popup=yes,width=1080,height=820,noopener=yes';
+// Keep rich-body compose URLs below a conservative size and fall back to clipboard for larger drafts.
 var OUTLOOK_COMPOSE_URL_MAX_CHARS=7000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
@@ -1216,27 +1217,29 @@ function sendFromEmailPreview(){
   var plainBody=buildDigestEmailText(parts,docs);
   var htmlBody=buildDigestEmailHtml(htmlParts,docs);
   var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
+  var successMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
   var sendBtn=document.getElementById('email-preview-send-btn');
   if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
-  function finishOpening(url,message){
+  function finishOpening(url,message,blockedMessage){
     var popupWindow=window.open(url,'_blank',OUTLOOK_DRAFT_WINDOW_FEATURES);
     if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
-    closeEmailPreviewModal();
     if(!popupWindow){
-      window.location.href=url;
-      return;
+      if(blockedMessage) showToast(blockedMessage);
+      return false;
     }
+    closeEmailPreviewModal();
     if(message) showToast(message);
+    return true;
   }
   if(outlookUrl.length>OUTLOOK_COMPOSE_URL_MAX_CHARS){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook - paste into the draft to keep formatting.');
+      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook; paste into the draft to keep formatting.','Outlook pop-up blocked. The email was copied, so allow pop-ups and try again.');
     }).catch(function(){
-      finishOpening('mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody),'Opened a plain-text draft because the formatted email was too large to open directly.');
+      finishOpening('mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody),'Opened a plain-text draft because the formatted email was too large to open directly.','Outlook pop-up blocked, and the formatted fallback was unavailable.');
     });
     return;
   }
-  finishOpening(outlookUrl,docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.');
+  finishOpening(outlookUrl,successMessage,'Outlook pop-up blocked. Allow pop-ups and try again.');
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
