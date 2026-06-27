@@ -56,32 +56,6 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .modal-docs-message ul{margin:8px 0 0 18px}
 .modal-docs-message li{margin-bottom:4px}
 
-/* EMAIL PREVIEW MODAL */
-.email-preview-modal{background:#fff;border-radius:14px;width:100%;max-width:680px;box-shadow:0 20px 60px rgba(0,0,0,0.25);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
-.email-preview-titlebar{background:linear-gradient(135deg,#0078d4 0%,#005a9e 100%);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-radius:14px 14px 0 0;flex-shrink:0}
-.email-preview-titlebar-label{font-size:13px;font-weight:600;color:#fff;letter-spacing:.04em}
-.email-preview-close{background:none;border:none;color:rgba(255,255,255,.75);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;font-family:"DM Sans",sans-serif}
-.email-preview-close:hover{background:rgba(255,255,255,.18);color:#fff}
-.email-preview-fields{border-bottom:1px solid #e0e0e0;flex-shrink:0}
-.email-preview-field{display:flex;align-items:baseline;padding:9px 20px;border-bottom:1px solid #f0f0f0;gap:10px}
-.email-preview-field:last-child{border-bottom:none}
-.email-preview-field-label{font-size:12px;font-weight:600;color:#555;min-width:52px;flex-shrink:0;letter-spacing:.03em;text-transform:uppercase}
-.email-preview-field-value{font-size:13.5px;color:#1a1a1a;flex:1;word-break:break-word;line-height:1.4}
-.email-preview-subject-value{font-weight:600}
-.email-preview-body-wrap{overflow-y:auto;flex:1;padding:20px 20px 8px;background:#fafafa}
-.email-preview-body{font-family:"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.7;color:rgb(26,10,10);background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:20px 24px}
-.email-preview-body p{margin:0 0 0.5em 0}
-.email-preview-body p:last-child{margin-bottom:0}
-.email-preview-body ul,.email-preview-body ol{margin:0.35em 0 0.5em 1.25em;padding:0}
-.email-preview-body li{margin:0 0 0.35em 0}
-.email-preview-divider{height:1px;background:#e0e0e0;margin:0 20px}
-.email-preview-footer{padding:14px 20px;display:flex;gap:10px;justify-content:flex-end;background:#fff;border-radius:0 0 14px 14px;flex-shrink:0}
-.email-preview-send-btn{background:#0078d4;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-family:"DM Sans",sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px}
-.email-preview-send-btn:hover{background:#006bb8}
-.email-preview-cancel-btn{background:none;border:1.5px solid var(--border2);color:var(--ink2);border-radius:7px;padding:9px 18px;font-family:"DM Sans",sans-serif;font-size:13.5px;cursor:pointer}
-.email-preview-cancel-btn:hover{border-color:var(--red);color:var(--red)}
-.email-preview-hint{font-size:11.5px;color:var(--ink3);text-align:center;padding:0 20px 12px;flex-shrink:0}
-
 /* INTAKE */
 .restore-banner{background:#fff3cc;border:1.5px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:none}
 .restore-banner h3{font-size:14px;font-weight:600;color:var(--amber);margin-bottom:6px}
@@ -458,31 +432,6 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div class="modal-docs-message" id="docs-confirm-message"></div>
     <button class="modal-submit" id="docs-confirm-yes-btn" onclick="confirmDocsAttachment(true)">Yes, documents are attached</button>
     <button class="modal-cancel" onclick="confirmDocsAttachment(false)">No, I still need to attach them</button>
-  </div>
-</div>
-
-<!-- EMAIL PREVIEW MODAL -->
-<div class="modal-overlay hidden" id="email-preview-modal" role="dialog" aria-modal="true" aria-labelledby="email-preview-title" onclick="if(event.target===this)closeEmailPreviewModal()">
-  <div class="email-preview-modal">
-    <div class="email-preview-titlebar">
-      <span class="email-preview-titlebar-label" id="email-preview-title">&#9993; Email draft preview</span>
-      <button class="email-preview-close" onclick="closeEmailPreviewModal()" aria-label="Close">&times;</button>
-    </div>
-    <div class="email-preview-fields">
-      <div class="email-preview-field">
-        <span class="email-preview-field-label">Subject</span>
-        <span class="email-preview-field-value email-preview-subject-value" id="email-preview-subject"></span>
-      </div>
-    </div>
-    <div class="email-preview-body-wrap">
-      <div class="email-preview-body" id="email-preview-body"></div>
-    </div>
-    <div class="email-preview-divider"></div>
-    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a formatted Outlook draft.</div>
-    <div class="email-preview-footer">
-      <button class="email-preview-cancel-btn" onclick="closeEmailPreviewModal()">Cancel</button>
-      <button class="email-preview-send-btn" id="email-preview-send-btn" onclick="sendFromEmailPreview()">&#9993; Open in Outlook</button>
-    </div>
   </div>
 </div>
 
@@ -1020,12 +969,9 @@ function copyOutputHTML(){
   });
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
-var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
-var EMAIL_ATTACHMENT_REMINDER_BG='#FFF3CC';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
-var OUTLOOK_DRAFT_WINDOW_FEATURES='popup=yes,width=1080,height=820,noopener=yes';
-// Keep compose URLs below a conservative size because large Outlook/browser URLs can fail silently.
-var OUTLOOK_COMPOSE_URL_MAX_BYTES=7000;
+// Keep compose URLs reasonably small, but still allow larger formatted drafts to open directly in Outlook.
+var OUTLOOK_COMPOSE_URL_MAX_BYTES=16000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -1096,33 +1042,27 @@ function sanitizeHtmlForEmail(html){
   clean(wrap);
   return wrap.innerHTML;
 }
-function formatHtmlForEmail(html){
-  var wrap=document.createElement('div');
-  wrap.innerHTML=sanitizeHtmlForEmail(html);
-  wrap.style.margin='0';
-  wrap.style.fontFamily='"Segoe UI",Arial,sans-serif';
-  wrap.style.fontSize='14px';
-  wrap.style.lineHeight='1.7';
-  wrap.style.color=EMAIL_TEXT_COLOR;
-  wrap.querySelectorAll('p').forEach(function(p){p.style.margin='0 0 0.5em 0';});
-  wrap.querySelectorAll('ul,ol').forEach(function(list){list.style.margin='0.35em 0 0.5em 1.25em';list.style.padding='0';});
-  wrap.querySelectorAll('li').forEach(function(li){li.style.margin='0 0 0.35em 0';});
-  if(wrap.lastElementChild) wrap.lastElementChild.style.marginBottom='0';
-  return wrap.innerHTML;
+function simplifyHtmlForOutlook(html){
+  return String(sanitizeHtmlForEmail(html)||'')
+    .replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi,'<br>')
+    .replace(/<\/div>\s*<div>/gi,'<br>')
+    .replace(/<div>/gi,'')
+    .replace(/<\/div>/gi,'')
+    .replace(/<p>\s*(<br\s*\/?>|\&nbsp;|\s)*<\/p>/gi,'')
+    .replace(/(\s*<br\s*\/?>\s*){3,}/gi,'<br><br>')
+    .trim();
 }
 function buildEmailHtmlFromParts(parts){
-  return parts.map(function(part){return '<div style="margin:0 0 16px 0;">'+formatHtmlForEmail(part)+'</div>';}).join('');
+  return parts.map(function(part){return simplifyHtmlForOutlook(part);}).filter(Boolean).join('<br><br>');
 }
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
-  var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
+  var items=names.length?'<ul>'+names.map(function(name){return '<li><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
-    '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:'+EMAIL_ATTACHMENT_REMINDER_BG+';color:'+EMAIL_TEXT_COLOR+';">',
-      '<p style="margin:0 0 8px 0;"><strong>Attachment reminder</strong></p>',
-      '<p style="margin:0 0 8px 0;">Please attach the required documents before you send this email in Outlook.</p>',
-      items,
-      '<p style="margin:0;background-color:'+EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG+';display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p>',
-    '</div>'
+    '<p><strong>Attachment reminder</strong></p>',
+    '<p>Please attach the required documents before you send this email in Outlook.</p>',
+    items,
+    '<p><span style="background-color: '+EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG+';"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></span></p>'
   ].join('');
 }
 function buildAttachmentReminderText(docs){
@@ -1146,12 +1086,18 @@ function buildDigestEmailText(parts,docs){
   if(parts&&parts.length) sections.push(parts.join('\n\n'));
   return sections.join('\n\n');
 }
+function setButtonPending(btn,pendingText){
+  if(!btn) return function(){};
+  var originalText=btn.textContent;
+  btn.textContent=pendingText;
+  btn.disabled=true;
+  return function(){
+    btn.textContent=originalText;
+    btn.disabled=false;
+  };
+}
 function buildOutlookComposeUrl(emailSubject,htmlBody){
   var params=new URLSearchParams({subject:emailSubject,body:htmlBody});
-  return 'https://outlook.office.com/mail/deeplink/compose?'+params.toString();
-}
-function buildOutlookSubjectOnlyUrl(emailSubject){
-  var params=new URLSearchParams({subject:emailSubject});
   return 'https://outlook.office.com/mail/deeplink/compose?'+params.toString();
 }
 function getUrlSizeBytes(url){
@@ -1189,67 +1135,31 @@ function confirmDocsAttachment(attached){
   if(attached&&action){action();}
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
-function openDigestEmailDraft(emailSubject,htmlParts,parts,docs){
-  openEmailPreviewModal(emailSubject,htmlParts,parts,docs);
-}
-var _emailPreview={subject:'',htmlParts:[],parts:[],docs:[]};
-function openEmailPreviewModal(emailSubject,htmlParts,parts,docs){
-  _emailPreview.subject=emailSubject;
-  _emailPreview.htmlParts=htmlParts;
-  _emailPreview.parts=parts;
-  _emailPreview.docs=docs||[];
-  var modal=document.getElementById('email-preview-modal');
-  var subjectEl=document.getElementById('email-preview-subject');
-  var bodyEl=document.getElementById('email-preview-body');
-  if(!modal||!subjectEl||!bodyEl) return;
-  subjectEl.textContent=emailSubject;
-  var htmlBody=buildDigestEmailHtml(htmlParts,_emailPreview.docs);
-  bodyEl.innerHTML=htmlBody;
-  modal.classList.remove('hidden');
-  var sendBtn=document.getElementById('email-preview-send-btn');
-  if(sendBtn){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){sendBtn.focus();});}else{sendBtn.focus();}}
-}
-function closeEmailPreviewModal(){
-  var modal=document.getElementById('email-preview-modal');
-  if(modal) modal.classList.add('hidden');
-}
-function sendFromEmailPreview(){
-  var emailSubject=_emailPreview.subject;
-  var htmlParts=_emailPreview.htmlParts;
-  var parts=_emailPreview.parts||[];
-  var docs=_emailPreview.docs||[];
+function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,triggerBtn){
   var plainBody=buildDigestEmailText(parts,docs);
   var htmlBody=buildDigestEmailHtml(htmlParts,docs);
   var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
   var successMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
-  var sendBtn=document.getElementById('email-preview-send-btn');
-  if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
+  var restoreBtn=setButtonPending(triggerBtn,'Opening\u2026');
   function finishOpening(url,message,blockedMessage){
-    var popupWindow=window.open(url,'_blank',OUTLOOK_DRAFT_WINDOW_FEATURES);
-    if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
-    if(!popupWindow){
+    var draftWindow=window.open(url,'_blank','noopener');
+    restoreBtn();
+    if(!draftWindow){
       if(blockedMessage) showToast(blockedMessage);
       return false;
     }
-    closeEmailPreviewModal();
     if(message) showToast(message);
     return true;
   }
   if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_URL_MAX_BYTES){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook; paste into the draft to keep formatting.','Email copied. Allow pop-ups, click Open in Outlook again, and then paste into the draft.');
+      finishOpening(outlookUrl,'Outlook draft opened. The formatted email was also copied as a backup because the draft is large.','Allow pop-ups and try again. The formatted email is already copied as a backup.');
     }).catch(function(){
-      var mailtoUrl='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody);
-      if(getUrlSizeBytes(mailtoUrl)>OUTLOOK_COMPOSE_URL_MAX_BYTES){
-        if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
-        showToast('Draft is too large to open automatically, and clipboard access is unavailable. Use Copy formatted or Copy plain text instead.');
-        return;
-      }
-      finishOpening(mailtoUrl,'Opened a plain-text draft because the formatted email was too large to open directly.','Outlook pop-up blocked, and the formatted fallback was unavailable.');
+      finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
     });
     return;
   }
-  finishOpening(outlookUrl,successMessage,'Outlook pop-up blocked. Allow pop-ups and try again.');
+  finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
@@ -1284,6 +1194,7 @@ function collectSelectedOutputTextParts(){
 }
 function sendDigestEmail(){
   var htmlParts=collectSelectedOutputHtmlParts(),parts=collectSelectedOutputTextParts(),docs=[];
+  var sendBtn=document.getElementById('send-email-btn');
   var nameInput=document.getElementById('applicant-name-input');
   var applicantName=(nameInput&&nameInput.value.trim())||'[applicant\'s name]';
   var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+applicantName;
@@ -1291,7 +1202,7 @@ function sendDigestEmail(){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
   if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
-  openDigestEmailDraft(emailSubject,htmlParts,parts,docs);
+  openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendBtn);
 }
 function resetForm(){answers={};renderIntake();}
 
