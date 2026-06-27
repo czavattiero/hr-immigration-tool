@@ -970,7 +970,7 @@ function copyOutputHTML(){
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
-// Heuristic threshold for copying a backup before opening Outlook directly; this is not a hard block.
+// If the compose URL exceeds this size, copy a formatted backup before opening Outlook directly.
 var OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES=16000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
@@ -1044,6 +1044,7 @@ function sanitizeHtmlForEmail(html){
 }
 function simplifyHtmlForOutlook(html){
   return String(sanitizeHtmlForEmail(html)||'')
+    // Order matters: normalize empty div placeholders first, then sibling boundaries, then strip wrappers.
     // Turn empty div placeholders into a single break first so blank editor lines are preserved.
     .replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi,'<br>')
     // Convert sibling div boundaries into line breaks before stripping the remaining wrappers.
@@ -1058,7 +1059,9 @@ function simplifyHtmlForOutlook(html){
     .trim();
 }
 function buildEmailHtmlFromParts(parts){
-  return parts.filter(function(part){return part&&String(part).trim();}).map(function(part){return simplifyHtmlForOutlook(part);}).filter(Boolean).join('<br><br>');
+  var validParts=parts.filter(function(part){return part&&String(part).trim();});
+  var simplifiedParts=validParts.map(function(part){return simplifyHtmlForOutlook(part);}).filter(Boolean);
+  return simplifiedParts.join('<br><br>');
 }
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
@@ -1159,7 +1162,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   }
   if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(outlookUrl,'Outlook draft opened. The formatted email was also copied as a backup because the draft is large.','Allow pop-ups and try again. The formatted email is already copied as a backup.');
+      finishOpening(outlookUrl,'Outlook draft opened. The formatted email was also copied as a backup because the draft is large.','Allow pop-ups and try again. The formatted email will be copied again as a backup.');
     }).catch(function(){
       finishOpening(outlookUrl,'Outlook draft opened. Clipboard backup was unavailable, so review the draft body after Outlook opens.','Allow pop-ups and try again.');
     });
