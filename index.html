@@ -955,6 +955,7 @@ function copyOutputHTML(){
   });
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
+var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -962,7 +963,13 @@ var EMAIL_SANITIZER_ALLOWED_TAGS={P:1,BR:1,STRONG:1,B:1,EM:1,I:1,U:1,SPAN:1,DIV:
 var EMAIL_SANITIZER_ALLOWED_STYLE_PROPS={color:1,'background-color':1,'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1};
 function sanitizeEmailColor(value){
   var v=String(value||'').trim();
-  if(/^#[0-9a-f]{3,8}$/i.test(v)||/^rgba?\([^()]+\)$/i.test(v)||/^[a-z]+$/i.test(v)) return v;
+  if(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)||v.toLowerCase()==='transparent') return v;
+  var match=v.match(/^rgba?\((.+)\)$/i);
+  if(match){
+    var parts=match[1].split(',').map(function(part){return part.trim();});
+    if(parts.length===3&&parts.every(function(part){return /^(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(part);})){return 'rgb('+parts.join(', ')+')';}
+    if(parts.length===4&&parts.slice(0,3).every(function(part){return /^(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(part);})&&/^(0|0?\.\d+|1(\.0+)?)$/.test(parts[3])){return 'rgba('+parts.join(', ')+')';}
+  }
   return '';
 }
 function sanitizeEmailStyleValue(prop,value){
@@ -1026,7 +1033,7 @@ function formatHtmlForEmail(html){
   wrap.style.fontFamily='"Segoe UI",Arial,sans-serif';
   wrap.style.fontSize='14px';
   wrap.style.lineHeight='1.7';
-  wrap.style.color='rgb(26, 10, 10)';
+  wrap.style.color=EMAIL_TEXT_COLOR;
   wrap.querySelectorAll('p').forEach(function(p){p.style.margin='0 0 0.5em 0';});
   wrap.querySelectorAll('ul,ol').forEach(function(list){list.style.margin='0.35em 0 0.5em 1.25em';list.style.padding='0';});
   wrap.querySelectorAll('li').forEach(function(li){li.style.margin='0 0 0.35em 0';});
@@ -1038,7 +1045,7 @@ function buildEmailHtmlFromParts(parts){
 }
 function buildEmailDocsHtml(docs){
   if(docs.length===0) return '';
-  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:rgb(26, 10, 10)">'
+  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:'+escA(EMAIL_TEXT_COLOR)+'">'
     +'<p style="margin:0 0 0.5em 0"><strong>Documents to attach:</strong></p>'
     +'<ul style="margin:0.35em 0 0.5em 1.25em;padding:0">'
     +docs.map(function(d,idx){
