@@ -67,6 +67,11 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .q-select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,0,0,.1)}
 .q-select.selected{border-color:var(--red);background-color:#fff}
 .group-badge{display:inline-block;margin-top:8px;padding:4px 11px;border-radius:99px;font-size:12px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
+.name-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px}
+.name-card-label{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px}
+.name-input{width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:9px 12px;font-family:"DM Sans",sans-serif;font-size:14px;color:var(--ink);background:var(--paper);outline:none}
+.name-input:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,0,0,.1);background:#fff}
+.name-input.filled{border-color:var(--red);background:#fff}
 
 /* OUTPUT */
 .output-section{margin-top:24px;border:1.5px solid var(--red);border-radius:var(--radius);overflow:hidden;display:none;animation:fadeUp .3s ease both}
@@ -439,6 +444,10 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <h3>&#9888; No questions are showing</h3>
       <p>Your saved data may be empty or from an older version of this tool.</p>
       <button class="restore-btn" onclick="hardReset()">Restore default questions</button>
+    </div>
+    <div class="name-card">
+      <div class="name-card-label">Applicant&rsquo;s name</div>
+      <input class="name-input" id="applicant-name-input" type="text" placeholder="Enter applicant&rsquo;s name&hellip;" oninput="this.classList.toggle('filled',this.value.trim()!=='')">
     </div>
     <div class="questions" id="questions-container"></div>
     <div class="output-section" id="output-section">
@@ -936,7 +945,7 @@ function copyOutputHTML(){
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
-var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
+var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
 /* Use 1800 as a safety threshold below common ~2000+ browser URL limits for deeplinks. */
 var MAX_OUTLOOK_URL_LENGTH=1800;
 function getDocDisplayName(doc,idx){
@@ -967,6 +976,9 @@ function collectSelectedOutputTextParts(){
 }
 function sendDigestEmail(){
   var htmlParts=collectSelectedOutputHtmlParts(),parts=collectSelectedOutputTextParts(),docs=[];
+  var nameInput=document.getElementById('applicant-name-input');
+  var applicantName=(nameInput&&nameInput.value.trim())||'[applicant\'s name]';
+  var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+applicantName;
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
@@ -994,7 +1006,7 @@ function sendDigestEmail(){
   }
   var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
-  var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
+  var encodedSubject=encodeURIComponent(emailSubject);
   var draftBodyContent=htmlParts.length>0?htmlBody:body;
   var encodedOutlookBody=encodeURIComponent(draftBodyContent);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
