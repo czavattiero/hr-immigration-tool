@@ -52,6 +52,9 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .modal-section{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .modal-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
 .modal-section-label{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:6px;display:block}
+.modal-docs-message{font-size:13px;color:var(--ink2);line-height:1.5;margin-bottom:16px}
+.modal-docs-message ul{margin:8px 0 0 18px}
+.modal-docs-message li{margin-bottom:4px}
 
 /* INTAKE */
 .restore-banner{background:#fff3cc;border:1.5px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:none}
@@ -418,6 +421,17 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div class="modal-error" id="chpw-error"></div>
     <button class="modal-submit" onclick="submitChangePw()">Save new password</button>
     <button class="modal-cancel" onclick="document.getElementById('chpw-modal').classList.add('hidden')">Cancel</button>
+  </div>
+</div>
+
+<!-- DOCS CONFIRMATION MODAL -->
+<div class="modal-overlay hidden" id="docs-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="docs-confirm-title">
+  <div class="modal">
+    <div class="modal-icon" aria-hidden="true">&#128206;</div>
+    <h2 id="docs-confirm-title">Confirm attachments</h2>
+    <div class="modal-docs-message" id="docs-confirm-message"></div>
+    <button class="modal-submit" id="docs-confirm-yes-btn" onclick="confirmDocsAttachment(true)">Yes, documents are attached</button>
+    <button class="modal-cancel" onclick="confirmDocsAttachment(false)">No, I still need to attach them</button>
   </div>
 </div>
 
@@ -1043,18 +1057,52 @@ function formatHtmlForEmail(html){
 function buildEmailHtmlFromParts(parts){
   return parts.map(function(part){return '<div style="margin:0 0 16px 0;">'+formatHtmlForEmail(part)+'</div>';}).join('');
 }
-function buildEmailDocsHtml(docs){
-  if(docs.length===0) return '';
-  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:'+escA(EMAIL_TEXT_COLOR)+'">'
-    +'<p style="margin:0 0 0.5em 0"><strong>Documents to attach:</strong></p>'
-    +'<ul style="margin:0.35em 0 0.5em 1.25em;padding:0">'
-    +docs.map(function(d,idx){
-      var docName=getDocDisplayName(d,idx);
-      var safeHrefValue=safeHref(d.url);
-      var detail=safeHrefValue?('Link: <a href="'+escA(safeHrefValue)+'" target="_blank" rel="noopener">'+esc(safeHrefValue)+'</a>'):(d.path?('File path: '+esc(d.path)):'Locate manually');
-      return '<li style="margin:0 0 0.35em 0"><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
-    }).join('')
-    +'</ul><p style="margin:0">Attach the documents listed above before sending.</p></div>';
+function buildDocsAttachmentPromptHtml(docs){
+  var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
+  var message='<p>Have you attached all required documents before sending this email?</p>';
+  if(names.length>0){
+    message+='<p><strong>Required documents:</strong></p><ul>'+names.map(function(name){return '<li>'+esc(name)+'</li>';}).join('')+'</ul>';
+  }
+  return message;
+}
+var pendingDocsAttachmentAction=null;
+function openDocsAttachmentModal(docs,onConfirm){
+  var modal=document.getElementById('docs-confirm-modal');
+  var message=document.getElementById('docs-confirm-message');
+  var yesBtn=document.getElementById('docs-confirm-yes-btn');
+  if(!modal||!message) return false;
+  pendingDocsAttachmentAction=typeof onConfirm==='function'?onConfirm:null;
+  message.innerHTML=buildDocsAttachmentPromptHtml(docs);
+  modal.classList.remove('hidden');
+  if(yesBtn){
+    if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){yesBtn.focus();});}
+    else{yesBtn.focus();}
+  }
+  return true;
+}
+function confirmDocsAttachment(attached){
+  var modal=document.getElementById('docs-confirm-modal');
+  if(modal) modal.classList.add('hidden');
+  var action=pendingDocsAttachmentAction;
+  pendingDocsAttachmentAction=null;
+  if(attached&&action){action();}
+  else if(!attached){showToast('Please attach the required documents and try again.');}
+}
+function openDigestEmailDraft(emailSubject,htmlParts,parts){
+  var body=parts.join('\n\n');
+  var htmlBody=buildEmailHtmlFromParts(htmlParts);
+  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
+  writeFormattedClipboard(htmlBody,body).then(function(){
+    var popupWindow=window.open(outlookUrl,'_blank','noopener');
+    if(!popupWindow){
+      showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
+      return;
+    }
+    showToast('Formatted email copied. Paste into Outlook draft to keep the same styling.');
+  }).catch(function(){
+    window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
+    showToast('Clipboard unavailable. Opened a plain-text draft instead.');
+  });
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
@@ -1096,31 +1144,13 @@ function sendDigestEmail(){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
   if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
-  var lines=[];
-  if(parts.length>0) lines.push(parts.join('\n\n'));
   if(docs.length>0){
-    lines.push('', 'Documents to attach:');
-    docs.forEach(function(d,idx){
-      var docName=getDocDisplayName(d,idx);
-      var detail=d.url?('Link: '+d.url):(d.path?('File path: '+d.path):'Locate manually');
-      lines.push('- '+docName+' ('+detail+')');
-    });
-    lines.push('', 'Attach the documents listed above before sending.');
-  }
-  var htmlBody=buildEmailHtmlFromParts(htmlParts)+buildEmailDocsHtml(docs);
-  var body=lines.join('\n');
-  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
-  writeFormattedClipboard(htmlBody,body).then(function(){
-    var popupWindow=window.open(outlookUrl,'_blank','noopener');
-    if(!popupWindow){
-      showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
-      return;
+    if(!openDocsAttachmentModal(docs,function(){openDigestEmailDraft(emailSubject,htmlParts,parts);})){
+      showToast('Unable to open attachment confirmation popup.');
     }
-    showToast('Formatted email copied. Paste into Outlook to keep the same styling.');
-  }).catch(function(){
-    window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
-    showToast('Clipboard unavailable. Opened a plain-text draft instead.');
-  });
+    return;
+  }
+  openDigestEmailDraft(emailSubject,htmlParts,parts);
 }
 function resetForm(){answers={};renderIntake();}
 
