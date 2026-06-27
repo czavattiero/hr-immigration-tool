@@ -1024,7 +1024,7 @@ var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
 var EMAIL_ATTACHMENT_REMINDER_BG='#FFF3CC';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
 var OUTLOOK_DRAFT_WINDOW_FEATURES='popup=yes,width=1080,height=820,noopener=yes';
-var OUTLOOK_COMPOSE_URL_MAX_LENGTH=7000;
+var OUTLOOK_COMPOSE_URL_MAX_CHARS=7000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -1228,9 +1228,9 @@ function sendFromEmailPreview(){
     }
     if(message) showToast(message);
   }
-  if(outlookUrl.length>OUTLOOK_COMPOSE_URL_MAX_LENGTH){
+  if(outlookUrl.length>OUTLOOK_COMPOSE_URL_MAX_CHARS){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook — paste into the draft to keep formatting.');
+      finishOpening(buildOutlookSubjectOnlyUrl(emailSubject),'Email copied for Outlook - paste into the draft to keep formatting.');
     }).catch(function(){
       finishOpening('mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(plainBody),'Opened a plain-text draft because the formatted email was too large to open directly.');
     });
