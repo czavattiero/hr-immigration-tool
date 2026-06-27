@@ -478,7 +478,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div class="email-preview-body" id="email-preview-body"></div>
     </div>
     <div class="email-preview-divider"></div>
-    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a draft. The formatted content will be copied to your clipboard &mdash; paste it (Ctrl+V) into the Outlook compose window.</div>
+    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a draft. The formatted content will be copied to your clipboard &mdash; paste it into the Outlook compose window.</div>
     <div class="email-preview-footer">
       <button class="email-preview-cancel-btn" onclick="closeEmailPreviewModal()">Cancel</button>
       <button class="email-preview-send-btn" id="email-preview-send-btn" onclick="sendFromEmailPreview()">&#9993; Open in Outlook</button>
@@ -1142,13 +1142,11 @@ function confirmDocsAttachment(attached){
 function openDigestEmailDraft(emailSubject,htmlParts,parts){
   openEmailPreviewModal(emailSubject,htmlParts,parts);
 }
-var _emailPreviewSubject='';
-var _emailPreviewHtmlParts=[];
-var _emailPreviewParts=[];
+var _emailPreview={subject:'',htmlParts:[],parts:[]};
 function openEmailPreviewModal(emailSubject,htmlParts,parts){
-  _emailPreviewSubject=emailSubject;
-  _emailPreviewHtmlParts=htmlParts;
-  _emailPreviewParts=parts;
+  _emailPreview.subject=emailSubject;
+  _emailPreview.htmlParts=htmlParts;
+  _emailPreview.parts=parts;
   var modal=document.getElementById('email-preview-modal');
   var subjectEl=document.getElementById('email-preview-subject');
   var bodyEl=document.getElementById('email-preview-body');
@@ -1165,9 +1163,9 @@ function closeEmailPreviewModal(){
   if(modal) modal.classList.add('hidden');
 }
 function sendFromEmailPreview(){
-  var emailSubject=_emailPreviewSubject;
-  var htmlParts=_emailPreviewHtmlParts;
-  var parts=_emailPreviewParts;
+  var emailSubject=_emailPreview.subject;
+  var htmlParts=_emailPreview.htmlParts;
+  var parts=_emailPreview.parts;
   var body=parts.join('\n\n');
   var htmlBody=buildEmailHtmlFromParts(htmlParts);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
