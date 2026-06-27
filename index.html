@@ -1111,7 +1111,14 @@ function buildEmailHtmlFromParts(parts){
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
   var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
-  return '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:#FFF3CC;color:'+EMAIL_TEXT_COLOR+';"><p style="margin:0 0 8px 0;"><strong>Attachment reminder</strong></p><p style="margin:0 0 8px 0;">Please attach the required documents before you send this email in Outlook.</p>'+items+'<p style="margin:0;background-color:#ffef99;display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p></div>';
+  return [
+    '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:#FFF3CC;color:'+EMAIL_TEXT_COLOR+';">',
+      '<p style="margin:0 0 8px 0;"><strong>Attachment reminder</strong></p>',
+      '<p style="margin:0 0 8px 0;">Please attach the required documents before you send this email in Outlook.</p>',
+      items,
+      '<p style="margin:0;background-color:#ffef99;display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p>',
+    '</div>'
+  ].join('');
 }
 function buildAttachmentReminderText(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
@@ -1200,7 +1207,7 @@ function sendFromEmailPreview(){
   var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
   var sendBtn=document.getElementById('email-preview-send-btn');
   if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
-  var popupWindow=window.open(outlookUrl,'hr-immigration-outlook-draft','popup=yes,width=1080,height=820,noopener');
+  var popupWindow=window.open(outlookUrl,'outlook-draft-window','popup=yes,width=1080,height=820,noopener');
   if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
   closeEmailPreviewModal();
   if(!popupWindow){
