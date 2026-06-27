@@ -970,8 +970,8 @@ function copyOutputHTML(){
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
 var EMAIL_ATTACHMENT_REMINDER_HIGHLIGHT_BG='#ffef99';
-// Keep compose URLs reasonably small, but still allow larger formatted drafts to open directly in Outlook.
-var OUTLOOK_COMPOSE_URL_MAX_BYTES=16000;
+// Heuristic threshold for copying a backup before opening Outlook directly; this is not a hard block.
+var OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES=16000;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
@@ -1044,11 +1044,14 @@ function sanitizeHtmlForEmail(html){
 }
 function simplifyHtmlForOutlook(html){
   return String(sanitizeHtmlForEmail(html)||'')
+    // Outlook deeplinks handle simple line-break-oriented markup more reliably than nested div blocks.
     .replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi,'<br>')
     .replace(/<\/div>\s*<div>/gi,'<br>')
     .replace(/<div>/gi,'')
     .replace(/<\/div>/gi,'')
+    // Remove empty paragraph wrappers that otherwise add noise and inflate the URL.
     .replace(/<p>\s*(<br\s*\/?>|&nbsp;|\s)*<\/p>/gi,'')
+    // Collapse excessive blank lines so large emails still fit in Outlook compose URLs more often.
     .replace(/(\s*<br\s*\/?>\s*){3,}/gi,'<br><br>')
     .trim();
 }
@@ -1057,7 +1060,7 @@ function buildEmailHtmlFromParts(parts){
 }
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
-  var items=names.length?'<ul>'+names.map(function(name){return '<li><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
+  var items=names.length?'<ul style="margin:8px 0 12px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
     '<p><strong>Attachment reminder</strong></p>',
     '<p>Please attach the required documents before you send this email in Outlook.</p>',
@@ -1151,7 +1154,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
     if(message) showToast(message);
     return true;
   }
-  if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_URL_MAX_BYTES){
+  if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
       finishOpening(outlookUrl,'Outlook draft opened. The formatted email was also copied as a backup because the draft is large.','Allow pop-ups and try again. The formatted email is already copied as a backup.');
     }).catch(function(){
