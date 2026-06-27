@@ -1107,8 +1107,7 @@ function setButtonPending(button,pendingText){
   };
 }
 function buildOutlookComposeUrl(emailSubject,htmlBody){
-  var params=new URLSearchParams({subject:emailSubject,body:htmlBody});
-  return 'https://outlook.office.com/mail/deeplink/compose?'+params.toString();
+  return 'https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(htmlBody);
 }
 function getUrlSizeBytes(url){
   if(typeof TextEncoder!=='undefined') return new TextEncoder().encode(String(url||'')).length;
