@@ -1044,9 +1044,11 @@ function sanitizeHtmlForEmail(html){
 }
 function simplifyHtmlForOutlook(html){
   return String(sanitizeHtmlForEmail(html)||'')
-    // Outlook deeplinks handle simple line-break-oriented markup more reliably than nested div blocks.
+    // Turn empty div placeholders into a single break first so blank editor lines are preserved.
     .replace(/<div>\s*(<br\s*\/?>)?\s*<\/div>/gi,'<br>')
+    // Convert sibling div boundaries into line breaks before stripping the remaining wrappers.
     .replace(/<\/div>\s*<div>/gi,'<br>')
+    // Remove any leftover div wrappers after their spacing has been normalized.
     .replace(/<div>/gi,'')
     .replace(/<\/div>/gi,'')
     // Remove empty paragraph wrappers that otherwise add noise and inflate the URL.
@@ -1056,7 +1058,7 @@ function simplifyHtmlForOutlook(html){
     .trim();
 }
 function buildEmailHtmlFromParts(parts){
-  return parts.map(function(part){return simplifyHtmlForOutlook(part);}).filter(Boolean).join('<br><br>');
+  return parts.filter(function(part){return part&&String(part).trim();}).map(function(part){return simplifyHtmlForOutlook(part);}).filter(Boolean).join('<br><br>');
 }
 function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
@@ -1089,6 +1091,7 @@ function buildDigestEmailText(parts,docs){
   if(parts&&parts.length) sections.push(parts.join('\n\n'));
   return sections.join('\n\n');
 }
+// Temporarily disables a button, swaps in pending text, and returns a function that restores its original state.
 function setButtonPending(btn,pendingText){
   if(!btn) return function(){};
   var originalText=btn.textContent;
