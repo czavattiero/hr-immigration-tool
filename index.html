@@ -1241,7 +1241,7 @@ function confirmDocsAttachment(attached){
 }
 function downloadEmailEml(emailSubject,htmlBody,plainBody){
   var boundary='eml_boundary_'+Date.now();
-  var safeFilename=emailSubject.replace(/[\\/:*?"<>|]/g,'_').substring(0,100);
+  var safeFilename=emailSubject.substring(0,100).replace(/[\\/:*?"<>|]/g,'_');
   // Wrap the HTML in a full document with an embedded style for paragraph spacing.
   // Outlook desktop honours both the embedded style and the existing inline styles.
   var fullHtml=[
@@ -1284,13 +1284,13 @@ function downloadEmailEml(emailSubject,htmlBody,plainBody){
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(function(){URL.revokeObjectURL(url);},30000);
+  setTimeout(function(){URL.revokeObjectURL(url);},30000); // 30 s gives the browser ample time to begin the download before the Blob URL is revoked.
 }
 function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   var plainBody=buildDigestEmailText(parts,docs);
   var htmlBody=buildDigestEmailHtml(htmlParts,docs);
   var graphSuccessMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
-  var emlSuccessMessage=docs.length?'Email draft downloaded \u2014 open the file, attach the required documents, add recipients, and send.':'Email draft downloaded \u2014 open the file, add recipients, and send.';
+  var emlSuccessMessage='Email draft downloaded \u2014 open the file'+(docs.length?', attach the required documents,':'')+', add recipients, and send.';
   var restoreBtn=setButtonPending(sendButton,'Opening\u2026');
   function finishOpening(url,message,blockedMessage){
     var draftWindow=window.open(url,'_blank','noopener');
