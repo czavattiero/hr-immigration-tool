@@ -967,7 +967,7 @@ function sanitizeEmailColor(value){
 }
 function sanitizeEmailStyleValue(prop,value){
   if(prop==='color'||prop==='background-color') return sanitizeEmailColor(value);
-  if(prop==='font-weight'&&/^(normal|bold|bolder|lighter|[1-9]00)$/i.test(value)) return value;
+  if(prop==='font-weight'&&/^(normal|bold|bolder|lighter|(100|[2-9]00))$/i.test(value)) return value;
   if(prop==='font-style'&&/^(normal|italic|oblique)$/i.test(value)) return value;
   if((prop==='text-decoration'||prop==='text-decoration-line')&&/^(none|underline|line-through|overline)(\s+(underline|line-through|overline))*$/i.test(value)) return value;
   return '';
@@ -1026,7 +1026,7 @@ function formatHtmlForEmail(html){
   wrap.style.fontFamily='"Segoe UI",Arial,sans-serif';
   wrap.style.fontSize='14px';
   wrap.style.lineHeight='1.7';
-  wrap.style.color='#1a0a0a';
+  wrap.style.color='rgb(26, 10, 10)';
   wrap.querySelectorAll('p').forEach(function(p){p.style.margin='0 0 0.5em 0';});
   wrap.querySelectorAll('ul,ol').forEach(function(list){list.style.margin='0.35em 0 0.5em 1.25em';list.style.padding='0';});
   wrap.querySelectorAll('li').forEach(function(li){li.style.margin='0 0 0.35em 0';});
@@ -1038,13 +1038,13 @@ function buildEmailHtmlFromParts(parts){
 }
 function buildEmailDocsHtml(docs){
   if(docs.length===0) return '';
-  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:#1a0a0a">'
+  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:rgb(26, 10, 10)">'
     +'<p style="margin:0 0 0.5em 0"><strong>Documents to attach:</strong></p>'
     +'<ul style="margin:0.35em 0 0.5em 1.25em;padding:0">'
     +docs.map(function(d,idx){
       var docName=getDocDisplayName(d,idx);
-      var safeUrl=safeHref(d.url);
-      var detail=safeUrl?('Link: <a href="'+escA(safeUrl)+'" target="_blank" rel="noopener">'+esc(safeUrl)+'</a>'):(d.path?('File path: '+esc(d.path)):'Locate manually');
+      var safeHrefValue=safeHref(d.url);
+      var detail=safeHrefValue?('Link: <a href="'+escA(safeHrefValue)+'" target="_blank" rel="noopener">'+esc(safeHrefValue)+'</a>'):(d.path?('File path: '+esc(d.path)):'Locate manually');
       return '<li style="margin:0 0 0.35em 0"><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
     }).join('')
     +'</ul><p style="margin:0">Attach the documents listed above before sending.</p></div>';
