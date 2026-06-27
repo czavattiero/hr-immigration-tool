@@ -427,7 +427,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 <!-- DOCS CONFIRMATION MODAL -->
 <div class="modal-overlay hidden" id="docs-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="docs-confirm-title">
   <div class="modal">
-    <div class="modal-icon">&#128206;</div>
+    <div class="modal-icon" aria-label="Document icon">&#128206;</div>
     <h2 id="docs-confirm-title">Confirm attachments</h2>
     <div class="modal-docs-message" id="docs-confirm-message"></div>
     <button class="modal-submit" id="docs-confirm-yes-btn" onclick="confirmDocsAttachment(true)">Yes, documents are attached</button>
@@ -1095,7 +1095,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts){
       showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
       return;
     }
-    showToast('Formatted email copied. Paste into the Outlook draft to keep the same styling.');
+    showToast('Formatted email copied. Paste into Outlook draft to keep the same styling.');
   }).catch(function(){
     window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
     showToast('Clipboard unavailable. Opened a plain-text draft instead.');
