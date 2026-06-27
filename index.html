@@ -958,9 +958,63 @@ var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer 
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
 }
-function formatHtmlForEmail(html){
+var EMAIL_ALLOWED_TAGS={P:1,BR:1,STRONG:1,B:1,EM:1,I:1,U:1,SPAN:1,DIV:1,UL:1,OL:1,LI:1,A:1,FONT:1};
+var EMAIL_ALLOWED_STYLE_PROPS={color:1,'background-color':1,'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1};
+function sanitizeEmailColor(value){
+  var v=String(value||'').trim();
+  if(/^#[0-9a-f]{3,8}$/i.test(v)||/^rgba?\([^()]+\)$/i.test(v)||/^[a-z]+$/i.test(v)) return v;
+  return '';
+}
+function sanitizeEmailStyle(styleText){
+  return String(styleText||'').split(';').map(function(rule){
+    var idx=rule.indexOf(':');
+    if(idx===-1) return '';
+    var prop=rule.slice(0,idx).trim().toLowerCase();
+    var value=rule.slice(idx+1).trim();
+    if(!EMAIL_ALLOWED_STYLE_PROPS[prop]||!value) return '';
+    if((prop==='color'||prop==='background-color')&&!sanitizeEmailColor(value)) return '';
+    return prop+': '+value;
+  }).filter(Boolean).join('; ');
+}
+function sanitizeHtmlForEmail(html){
   var wrap=document.createElement('div');
   wrap.innerHTML=html||'';
+  function clean(node){
+    Array.from(node.children).forEach(function(child){
+      clean(child);
+      var tag=child.tagName;
+      if(!EMAIL_ALLOWED_TAGS[tag]){
+        if(tag==='SCRIPT'||tag==='STYLE'){child.remove();return;}
+        while(child.firstChild) node.insertBefore(child.firstChild,child);
+        child.remove();
+        return;
+      }
+      var rawStyle=child.getAttribute('style');
+      var rawHref=child.getAttribute('href');
+      var rawColor=child.getAttribute('color');
+      Array.from(child.attributes).forEach(function(attr){child.removeAttribute(attr.name);});
+      var safeStyle=sanitizeEmailStyle(rawStyle);
+      if(tag==='FONT'&&rawColor){
+        var safeColor=sanitizeEmailColor(rawColor);
+        if(safeColor) safeStyle=(safeStyle?safeStyle+'; ':'')+'color: '+safeColor;
+      }
+      if(safeStyle) child.setAttribute('style',safeStyle);
+      if(tag==='A'&&rawHref){
+        var safeUrl=safeHref(rawHref);
+        if(safeUrl){
+          child.setAttribute('href',safeUrl);
+          child.setAttribute('target','_blank');
+          child.setAttribute('rel','noopener');
+        }
+      }
+    });
+  }
+  clean(wrap);
+  return wrap.innerHTML;
+}
+function formatHtmlForEmail(html){
+  var wrap=document.createElement('div');
+  wrap.innerHTML=sanitizeHtmlForEmail(html);
   wrap.style.margin='0';
   wrap.style.fontFamily='"Segoe UI",Arial,sans-serif';
   wrap.style.fontSize='14px';
@@ -969,7 +1023,7 @@ function formatHtmlForEmail(html){
   wrap.querySelectorAll('p').forEach(function(p){p.style.margin='0 0 0.5em 0';});
   wrap.querySelectorAll('ul,ol').forEach(function(list){list.style.margin='0.35em 0 0.5em 1.25em';list.style.padding='0';});
   wrap.querySelectorAll('li').forEach(function(li){li.style.margin='0 0 0.35em 0';});
-  if(wrap.lastElementChild&&wrap.lastElementChild.style) wrap.lastElementChild.style.marginBottom='0';
+  if(wrap.lastElementChild) wrap.lastElementChild.style.marginBottom='0';
   return wrap.innerHTML;
 }
 function buildEmailHtmlFromParts(parts){
@@ -995,13 +1049,6 @@ function writeFormattedClipboard(html,plain){
 function writePlainClipboard(text){
   if(!navigator.clipboard||!navigator.clipboard.writeText) return Promise.reject(new Error('Clipboard text unsupported'));
   return navigator.clipboard.writeText(text);
-}
-function openDraftPreview(subject,htmlBody,outlookUrl){
-  var preview=window.open('','_blank','noopener');
-  if(!preview) return false;
-  preview.document.write('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Email draft preview</title></head><body style="margin:0;background:#f5ede8;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;color:#1a0a0a"><div style="max-width:780px;margin:0 auto;padding:32px 20px"><div style="background:#fff;border:1px solid rgba(80,10,10,0.12);border-radius:12px;overflow:hidden"><div style="background:#CC0000;color:#fff;padding:14px 18px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Email draft preview</div><div style="padding:20px 22px;border-bottom:1px solid rgba(80,10,10,0.12)"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8a6060;margin-bottom:6px">Subject</div><div style="font-size:14px;line-height:1.6">'+esc(subject)+'</div></div><div style="padding:20px 22px"><p style="margin:0 0 14px 0;font-size:13px;line-height:1.6;color:#4a2020">Use the formatted content below for your email draft. Open Outlook and paste this content into the message body to keep the same paragraph spacing, bold text, colours and highlights.</p><div style="margin:0 0 16px 0"><a href="'+escA(outlookUrl)+'" target="_blank" rel="noopener" style="display:inline-block;background:#CC0000;color:#fff;text-decoration:none;border-radius:6px;padding:10px 14px;font-size:13px;font-weight:600">Open Outlook compose</a></div><div>'+htmlBody+'</div></div></div></div></body></html>');
-  preview.document.close();
-  return true;
 }
 function collectSelectedOutputTextParts(){
   var parts=[];
@@ -1052,13 +1099,11 @@ function sendDigestEmail(){
   writeFormattedClipboard(htmlBody,body).then(function(){
     var popupWindow=window.open(outlookUrl,'_blank','noopener');
     if(!popupWindow){
-      if(openDraftPreview(emailSubject,htmlBody,outlookUrl)) showToast('Outlook pop-up blocked. Preview opened; paste into Outlook to keep formatting.');
-      else showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
+      showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
       return;
     }
     showToast('Formatted email copied. Paste into Outlook to keep the same styling.');
   }).catch(function(){
-    if(openDraftPreview(emailSubject,htmlBody,outlookUrl)){showToast('Draft preview opened. Copy the formatted content into Outlook.');return;}
     window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
     showToast('Clipboard unavailable. Opened a plain-text draft instead.');
   });
