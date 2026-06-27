@@ -1109,7 +1109,7 @@ function sendDigestEmail(){
   }
   var htmlBody=buildEmailHtmlFromParts(htmlParts)+buildEmailDocsHtml(docs);
   var body=lines.join('\n');
-  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
+  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
   writeFormattedClipboard(htmlBody,body).then(function(){
     var popupWindow=window.open(outlookUrl,'_blank','noopener');
     if(!popupWindow){
