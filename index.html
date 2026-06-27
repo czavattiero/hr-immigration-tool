@@ -427,7 +427,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 <!-- DOCS CONFIRMATION MODAL -->
 <div class="modal-overlay hidden" id="docs-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="docs-confirm-title">
   <div class="modal">
-    <div class="modal-icon" aria-label="Document icon">&#128206;</div>
+    <div class="modal-icon" aria-hidden="true">&#128206;</div>
     <h2 id="docs-confirm-title">Confirm attachments</h2>
     <div class="modal-docs-message" id="docs-confirm-message"></div>
     <button class="modal-submit" id="docs-confirm-yes-btn" onclick="confirmDocsAttachment(true)">Yes, documents are attached</button>
@@ -1074,7 +1074,10 @@ function openDocsAttachmentModal(docs,onConfirm){
   pendingDocsAttachmentAction=typeof onConfirm==='function'?onConfirm:null;
   message.innerHTML=buildDocsAttachmentPromptHtml(docs);
   modal.classList.remove('hidden');
-  if(yesBtn) setTimeout(function(){yesBtn.focus();},0);
+  if(yesBtn){
+    if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){yesBtn.focus();});}
+    else{yesBtn.focus();}
+  }
   return true;
 }
 function confirmDocsAttachment(attached){
@@ -1083,7 +1086,7 @@ function confirmDocsAttachment(attached){
   var action=pendingDocsAttachmentAction;
   pendingDocsAttachmentAction=null;
   if(attached&&action){action();}
-  else if(!attached){showToast('Attach the required documents before sending.');}
+  else if(!attached){showToast('Please attach the required documents and try again.');}
 }
 function openDigestEmailDraft(emailSubject,htmlParts,parts){
   var body=parts.join('\n\n');
