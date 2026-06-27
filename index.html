@@ -1239,11 +1239,58 @@ function confirmDocsAttachment(attached){
   if(attached&&action){action();}
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
+function downloadEmailEml(emailSubject,htmlBody,plainBody){
+  var boundary='eml_boundary_'+Date.now();
+  var safeFilename=emailSubject.substring(0,100).replace(/[\\/:*?"<>|]/g,'_');
+  // Wrap the HTML in a full document with an embedded style for paragraph spacing.
+  // Outlook desktop honours both the embedded style and the existing inline styles.
+  var fullHtml=[
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#000;}p{margin:0 0 8pt 0;}</style>',
+    '</head>',
+    '<body>',
+    htmlBody,
+    '</body>',
+    '</html>'
+  ].join('\r\n');
+  var emlLines=[
+    'MIME-Version: 1.0',
+    'Subject: '+emailSubject,
+    'Content-Type: multipart/alternative; boundary="'+boundary+'"',
+    '',
+    '--'+boundary,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    plainBody,
+    '',
+    '--'+boundary,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    fullHtml,
+    '',
+    '--'+boundary+'--'
+  ];
+  var blob=new Blob([emlLines.join('\r\n')],{type:'application/octet-stream'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download=safeFilename+'.eml';
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},30000); // 30 s gives the browser ample time to begin the download before the Blob URL is revoked.
+}
 function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   var plainBody=buildDigestEmailText(parts,docs);
   var htmlBody=buildDigestEmailHtml(htmlParts,docs);
-  var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
-  var successMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
+  var graphSuccessMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
+  var emlSuccessMessage='Email draft downloaded \u2014 open the file'+(docs.length?', attach the required documents,':'')+', add recipients, and send.';
   var restoreBtn=setButtonPending(sendButton,'Opening\u2026');
   function finishOpening(url,message,blockedMessage){
     var draftWindow=window.open(url,'_blank','noopener');
@@ -1255,11 +1302,25 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
     if(message) showToast(message);
     return true;
   }
-  // Fallback: copy formatted HTML to clipboard and open via compose URL.
+  // Primary non-Azure path: download a .eml file so Outlook opens it with full HTML
+  // formatting preserved.  Falls back to the compose URL + clipboard approach only if
+  // the browser does not support Blob URLs (extremely unlikely in modern browsers).
+  function openWithEml(){
+    try {
+      downloadEmailEml(emailSubject,htmlBody,plainBody);
+      restoreBtn();
+      showToast(emlSuccessMessage);
+    } catch(emlErr){
+      console.warn('EML download failed, falling back to compose URL:',emlErr);
+      openWithComposeUrl();
+    }
+  }
+  // Last-resort fallback: copy formatted HTML to clipboard and open via compose URL.
   // Outlook may strip inline styles from the body URL parameter, so the clipboard
   // copy lets users paste the fully-formatted version with Ctrl+V if needed.
-  function openWithFallback(){
-    var copySuccessMessage=(successMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
+  function openWithComposeUrl(){
+    var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
+    var copySuccessMessage=(graphSuccessMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
     var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
       finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
@@ -1267,7 +1328,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
       if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
         finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
       } else {
-        finishOpening(outlookUrl,successMessage,'Allow pop-ups and try again.');
+        finishOpening(outlookUrl,graphSuccessMessage,'Allow pop-ups and try again.');
       }
     });
   }
@@ -1276,13 +1337,13 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
   // configured or the API call fails for any reason.
   if(GRAPH_CLIENT_ID&&GRAPH_TENANT_ID){
     createMailDraftViaGraph(emailSubject,htmlBody).then(function(draftUrl){
-      finishOpening(draftUrl,successMessage,'Allow pop-ups and try again.');
+      finishOpening(draftUrl,graphSuccessMessage,'Allow pop-ups and try again.');
     }).catch(function(graphErr){
-      console.warn('Graph API draft creation failed, falling back to URL approach:',graphErr);
-      openWithFallback();
+      console.warn('Graph API draft creation failed, falling back:',graphErr);
+      openWithEml();
     });
   } else {
-    openWithFallback();
+    openWithEml();
   }
 }
 function writeFormattedClipboard(html,plain){
