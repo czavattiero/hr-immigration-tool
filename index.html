@@ -937,7 +937,7 @@ function copyOutputHTML(){
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
-/* Keep under common browser URL limits to reduce deeplink failures. */
+/* Keep under common browser URL limits (~2000+) to reduce deeplink failures with safety margin. */
 var MAX_OUTLOOK_URL_LENGTH=1800;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
@@ -995,8 +995,8 @@ function sendDigestEmail(){
   var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
   var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
-  var outlookBody=htmlParts.length>0?htmlBody:body;
-  var encodedOutlookBody=encodeURIComponent(outlookBody);
+  var outlookBodyContent=htmlParts.length>0?htmlBody:body;
+  var encodedOutlookBody=encodeURIComponent(outlookBodyContent);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
   if(outlookUrl.length>MAX_OUTLOOK_URL_LENGTH){
     window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
