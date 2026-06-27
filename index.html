@@ -533,7 +533,7 @@ function safeHref(url){
   if(!url) return '';
   try{
     var parsed=new URL(String(url),window.location.href);
-    if(parsed.protocol==='http:'||parsed.protocol==='https:'||parsed.protocol==='mailto:') return parsed.href;
+    if(parsed.protocol==='https:'||parsed.protocol==='mailto:') return parsed.href;
   } catch(e){}
   return '';
 }
@@ -937,7 +937,7 @@ function copyOutputHTML(){
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
-/* Keep under common browser URL limits (~2000+) to reduce deeplink failures with safety margin. */
+/* Use 1800 as a safety threshold below common ~2000+ browser URL limits for deeplinks. */
 var MAX_OUTLOOK_URL_LENGTH=1800;
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
@@ -995,16 +995,16 @@ function sendDigestEmail(){
   var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
   var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
-  var outlookBodyContent=htmlParts.length>0?htmlBody:body;
-  var encodedOutlookBody=encodeURIComponent(outlookBodyContent);
+  var draftBodyContent=htmlParts.length>0?htmlBody:body;
+  var encodedOutlookBody=encodeURIComponent(draftBodyContent);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
   if(outlookUrl.length>MAX_OUTLOOK_URL_LENGTH){
     window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
     showToast('Email is too long for Outlook link. Opened your default mail app instead.');
     return;
   }
-  var outlookWindow=window.open(outlookUrl,'_blank','noopener');
-  if(!outlookWindow){
+  var popupWindow=window.open(outlookUrl,'_blank','noopener');
+  if(!popupWindow){
     window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
     showToast('Outlook pop-up blocked. Opened your default mail app instead.');
     return;
