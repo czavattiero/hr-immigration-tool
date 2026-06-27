@@ -941,15 +941,128 @@ function collectSelectedOutputHtmlParts(){
 }
 function copyOutputHTML(){
   var parts=collectSelectedOutputHtmlParts();
-  var h=parts.join('<br>'),p=parts.map(htmlToText).join('\n\n');
-  try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
-  catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
+  var h=buildEmailHtmlFromParts(parts),p=parts.map(htmlToText).join('\n\n');
+  writeFormattedClipboard(h,p).then(function(){
+    var b=document.getElementById('copy-html-btn');
+    b.textContent='Copied!';
+    setTimeout(function(){b.textContent='Copy formatted';},2000);
+  }).catch(function(){
+    writePlainClipboard(p).then(function(){
+      var b=document.getElementById('copy-html-btn');
+      b.textContent='Copied!';
+      setTimeout(function(){b.textContent='Copy formatted';},2000);
+    });
+  });
 }
 var DIGEST_EMAIL_SUBJECT_BASE='University of Calgary - Compliance Fee and Offer of Employment Number';
-/* Use 1800 as a safety threshold below common ~2000+ browser URL limits for deeplinks. */
-var MAX_OUTLOOK_URL_LENGTH=1800;
+var EMAIL_TEXT_COLOR='rgb(26, 10, 10)';
 function getDocDisplayName(doc,idx){
   return doc.name||(doc.path?doc.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
+}
+var EMAIL_SANITIZER_ALLOWED_TAGS={P:1,BR:1,STRONG:1,B:1,EM:1,I:1,U:1,SPAN:1,DIV:1,UL:1,OL:1,LI:1,A:1,FONT:1};
+var EMAIL_SANITIZER_ALLOWED_STYLE_PROPS={color:1,'background-color':1,'font-weight':1,'font-style':1,'text-decoration':1,'text-decoration-line':1};
+function sanitizeEmailColor(value){
+  var v=String(value||'').trim();
+  if(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)||v.toLowerCase()==='transparent') return v;
+  var match=v.match(/^rgba?\((.+)\)$/i);
+  if(match){
+    var parts=match[1].split(',').map(function(part){return part.trim();});
+    if(parts.length===3&&parts.every(function(part){return /^(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(part);})){return 'rgb('+parts.join(', ')+')';}
+    if(parts.length===4&&parts.slice(0,3).every(function(part){return /^(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(part);})&&/^(0|0?\.\d+|1(\.0+)?)$/.test(parts[3])){return 'rgba('+parts.join(', ')+')';}
+  }
+  return '';
+}
+function sanitizeEmailStyleValue(prop,value){
+  if(prop==='color'||prop==='background-color') return sanitizeEmailColor(value);
+  if(prop==='font-weight'&&/^(normal|bold|bolder|lighter|(100|[2-9]00))$/i.test(value)) return value;
+  if(prop==='font-style'&&/^(normal|italic|oblique)$/i.test(value)) return value;
+  if((prop==='text-decoration'||prop==='text-decoration-line')&&/^(none|underline|line-through|overline)(\s+(underline|line-through|overline))*$/i.test(value)) return value;
+  return '';
+}
+function sanitizeEmailStyle(styleText){
+  return String(styleText||'').split(';').map(function(rule){
+    var idx=rule.indexOf(':');
+    if(idx===-1) return '';
+    var prop=rule.slice(0,idx).trim().toLowerCase();
+    var value=rule.slice(idx+1).trim();
+    if(!EMAIL_SANITIZER_ALLOWED_STYLE_PROPS[prop]||!value) return '';
+    var safeValue=sanitizeEmailStyleValue(prop,value);
+    return safeValue?(prop+': '+safeValue):'';
+  }).filter(Boolean).join('; ');
+}
+function sanitizeHtmlForEmail(html){
+  var wrap=document.createElement('div');
+  wrap.innerHTML=html||'';
+  function clean(node){
+    Array.from(node.children).forEach(function(child){
+      clean(child);
+      var tag=child.tagName;
+      if(!EMAIL_SANITIZER_ALLOWED_TAGS[tag]){
+        if(tag==='SCRIPT'||tag==='STYLE'){child.remove();return;}
+        while(child.firstChild) node.insertBefore(child.firstChild,child);
+        child.remove();
+        return;
+      }
+      var rawStyle=child.getAttribute('style');
+      var rawHref=child.getAttribute('href');
+      var rawColor=child.getAttribute('color');
+      Array.from(child.attributes).forEach(function(attr){child.removeAttribute(attr.name);});
+      var safeStyle=sanitizeEmailStyle(rawStyle);
+      if(tag==='FONT'&&rawColor){
+        var safeColor=sanitizeEmailColor(rawColor);
+        if(safeColor) safeStyle=(safeStyle?safeStyle+'; ':'')+'color: '+safeColor;
+      }
+      if(safeStyle) child.setAttribute('style',safeStyle);
+      if(tag==='A'&&rawHref){
+        var safeHrefValue=safeHref(rawHref);
+        if(safeHrefValue){
+          child.setAttribute('href',safeHrefValue);
+          child.setAttribute('target','_blank');
+          child.setAttribute('rel','noopener');
+        }
+      }
+    });
+  }
+  clean(wrap);
+  return wrap.innerHTML;
+}
+function formatHtmlForEmail(html){
+  var wrap=document.createElement('div');
+  wrap.innerHTML=sanitizeHtmlForEmail(html);
+  wrap.style.margin='0';
+  wrap.style.fontFamily='"Segoe UI",Arial,sans-serif';
+  wrap.style.fontSize='14px';
+  wrap.style.lineHeight='1.7';
+  wrap.style.color=EMAIL_TEXT_COLOR;
+  wrap.querySelectorAll('p').forEach(function(p){p.style.margin='0 0 0.5em 0';});
+  wrap.querySelectorAll('ul,ol').forEach(function(list){list.style.margin='0.35em 0 0.5em 1.25em';list.style.padding='0';});
+  wrap.querySelectorAll('li').forEach(function(li){li.style.margin='0 0 0.35em 0';});
+  if(wrap.lastElementChild) wrap.lastElementChild.style.marginBottom='0';
+  return wrap.innerHTML;
+}
+function buildEmailHtmlFromParts(parts){
+  return parts.map(function(part){return '<div style="margin:0 0 16px 0;">'+formatHtmlForEmail(part)+'</div>';}).join('');
+}
+function buildEmailDocsHtml(docs){
+  if(docs.length===0) return '';
+  return '<div style="margin:24px 0 0 0;font-family:&quot;Segoe UI&quot;,Arial,sans-serif;font-size:14px;line-height:1.7;color:'+escA(EMAIL_TEXT_COLOR)+'">'
+    +'<p style="margin:0 0 0.5em 0"><strong>Documents to attach:</strong></p>'
+    +'<ul style="margin:0.35em 0 0.5em 1.25em;padding:0">'
+    +docs.map(function(d,idx){
+      var docName=getDocDisplayName(d,idx);
+      var safeHrefValue=safeHref(d.url);
+      var detail=safeHrefValue?('Link: <a href="'+escA(safeHrefValue)+'" target="_blank" rel="noopener">'+esc(safeHrefValue)+'</a>'):(d.path?('File path: '+esc(d.path)):'Locate manually');
+      return '<li style="margin:0 0 0.35em 0"><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
+    }).join('')
+    +'</ul><p style="margin:0">Attach the documents listed above before sending.</p></div>';
+}
+function writeFormattedClipboard(html,plain){
+  if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
+  return navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([plain],{type:'text/plain'})})]);
+}
+function writePlainClipboard(text){
+  if(!navigator.clipboard||!navigator.clipboard.writeText) return Promise.reject(new Error('Your browser does not support clipboard operations.'));
+  return navigator.clipboard.writeText(text);
 }
 function collectSelectedOutputTextParts(){
   var parts=[];
@@ -983,19 +1096,9 @@ function sendDigestEmail(){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
   if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
-  var htmlLines=[];
   var lines=[];
-  if(htmlParts.length>0) htmlLines.push(htmlParts.join('<br><br>'));
   if(parts.length>0) lines.push(parts.join('\n\n'));
   if(docs.length>0){
-    htmlLines.push('<br><br><strong>Documents to attach:</strong><ul>'+docs.map(function(d,idx){
-      var docName=getDocDisplayName(d,idx);
-      var detail='Locate manually';
-      var safeUrl=safeHref(d.url);
-      if(safeUrl) detail='Link: <a href="'+escA(safeUrl)+'" target="_blank" rel="noopener">'+esc(safeUrl)+'</a>';
-      else if(d.path) detail='File path: '+esc(d.path);
-      return '<li><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
-    }).join('')+'</ul><p>Attach the documents listed above before sending.</p>');
     lines.push('', 'Documents to attach:');
     docs.forEach(function(d,idx){
       var docName=getDocDisplayName(d,idx);
@@ -1004,24 +1107,20 @@ function sendDigestEmail(){
     });
     lines.push('', 'Attach the documents listed above before sending.');
   }
-  var htmlBody=htmlLines.join('');
+  var htmlBody=buildEmailHtmlFromParts(htmlParts)+buildEmailDocsHtml(docs);
   var body=lines.join('\n');
-  var encodedSubject=encodeURIComponent(emailSubject);
-  var draftBodyContent=htmlParts.length>0?htmlBody:body;
-  var encodedOutlookBody=encodeURIComponent(draftBodyContent);
-  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
-  if(outlookUrl.length>MAX_OUTLOOK_URL_LENGTH){
-    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
-    showToast('Email is too long for Outlook link. Opened your default mail app instead.');
-    return;
-  }
-  var popupWindow=window.open(outlookUrl,'_blank','noopener');
-  if(!popupWindow){
-    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
-    showToast('Outlook pop-up blocked. Opened your default mail app instead.');
-    return;
-  }
-  showToast('Outlook draft opened in a new tab');
+  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
+  writeFormattedClipboard(htmlBody,body).then(function(){
+    var popupWindow=window.open(outlookUrl,'_blank','noopener');
+    if(!popupWindow){
+      showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
+      return;
+    }
+    showToast('Formatted email copied. Paste into Outlook to keep the same styling.');
+  }).catch(function(){
+    window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
+    showToast('Clipboard unavailable. Opened a plain-text draft instead.');
+  });
 }
 function resetForm(){answers={};renderIntake();}
 
