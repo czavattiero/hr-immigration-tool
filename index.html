@@ -56,6 +56,32 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .modal-docs-message ul{margin:8px 0 0 18px}
 .modal-docs-message li{margin-bottom:4px}
 
+/* EMAIL PREVIEW MODAL */
+.email-preview-modal{background:#fff;border-radius:14px;width:100%;max-width:680px;box-shadow:0 20px 60px rgba(0,0,0,0.25);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
+.email-preview-titlebar{background:linear-gradient(135deg,#0078d4 0%,#005a9e 100%);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-radius:14px 14px 0 0;flex-shrink:0}
+.email-preview-titlebar-label{font-size:13px;font-weight:600;color:#fff;letter-spacing:.04em}
+.email-preview-close{background:none;border:none;color:rgba(255,255,255,.75);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;font-family:"DM Sans",sans-serif}
+.email-preview-close:hover{background:rgba(255,255,255,.18);color:#fff}
+.email-preview-fields{border-bottom:1px solid #e0e0e0;flex-shrink:0}
+.email-preview-field{display:flex;align-items:baseline;padding:9px 20px;border-bottom:1px solid #f0f0f0;gap:10px}
+.email-preview-field:last-child{border-bottom:none}
+.email-preview-field-label{font-size:12px;font-weight:600;color:#555;min-width:52px;flex-shrink:0;letter-spacing:.03em;text-transform:uppercase}
+.email-preview-field-value{font-size:13.5px;color:#1a1a1a;flex:1;word-break:break-word;line-height:1.4}
+.email-preview-subject-value{font-weight:600}
+.email-preview-body-wrap{overflow-y:auto;flex:1;padding:20px 20px 8px;background:#fafafa}
+.email-preview-body{font-family:"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.7;color:rgb(26,10,10);background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:20px 24px}
+.email-preview-body p{margin:0 0 0.5em 0}
+.email-preview-body p:last-child{margin-bottom:0}
+.email-preview-body ul,.email-preview-body ol{margin:0.35em 0 0.5em 1.25em;padding:0}
+.email-preview-body li{margin:0 0 0.35em 0}
+.email-preview-divider{height:1px;background:#e0e0e0;margin:0 20px}
+.email-preview-footer{padding:14px 20px;display:flex;gap:10px;justify-content:flex-end;background:#fff;border-radius:0 0 14px 14px;flex-shrink:0}
+.email-preview-send-btn{background:#0078d4;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-family:"DM Sans",sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px}
+.email-preview-send-btn:hover{background:#006bb8}
+.email-preview-cancel-btn{background:none;border:1.5px solid var(--border2);color:var(--ink2);border-radius:7px;padding:9px 18px;font-family:"DM Sans",sans-serif;font-size:13.5px;cursor:pointer}
+.email-preview-cancel-btn:hover{border-color:var(--red);color:var(--red)}
+.email-preview-hint{font-size:11.5px;color:var(--ink3);text-align:center;padding:0 20px 12px;flex-shrink:0}
+
 /* INTAKE */
 .restore-banner{background:#fff3cc;border:1.5px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:none}
 .restore-banner h3{font-size:14px;font-weight:600;color:var(--amber);margin-bottom:6px}
@@ -432,6 +458,31 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div class="modal-docs-message" id="docs-confirm-message"></div>
     <button class="modal-submit" id="docs-confirm-yes-btn" onclick="confirmDocsAttachment(true)">Yes, documents are attached</button>
     <button class="modal-cancel" onclick="confirmDocsAttachment(false)">No, I still need to attach them</button>
+  </div>
+</div>
+
+<!-- EMAIL PREVIEW MODAL -->
+<div class="modal-overlay hidden" id="email-preview-modal" role="dialog" aria-modal="true" aria-labelledby="email-preview-title" onclick="if(event.target===this)closeEmailPreviewModal()">
+  <div class="email-preview-modal">
+    <div class="email-preview-titlebar">
+      <span class="email-preview-titlebar-label" id="email-preview-title">&#9993; Email draft preview</span>
+      <button class="email-preview-close" onclick="closeEmailPreviewModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="email-preview-fields">
+      <div class="email-preview-field">
+        <span class="email-preview-field-label">Subject</span>
+        <span class="email-preview-field-value email-preview-subject-value" id="email-preview-subject"></span>
+      </div>
+    </div>
+    <div class="email-preview-body-wrap">
+      <div class="email-preview-body" id="email-preview-body"></div>
+    </div>
+    <div class="email-preview-divider"></div>
+    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a draft. The formatted content will be copied to your clipboard &mdash; paste it (Ctrl+V) into the Outlook compose window.</div>
+    <div class="email-preview-footer">
+      <button class="email-preview-cancel-btn" onclick="closeEmailPreviewModal()">Cancel</button>
+      <button class="email-preview-send-btn" id="email-preview-send-btn" onclick="sendFromEmailPreview()">&#9993; Open in Outlook</button>
+    </div>
   </div>
 </div>
 
@@ -1089,17 +1140,51 @@ function confirmDocsAttachment(attached){
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
 function openDigestEmailDraft(emailSubject,htmlParts,parts){
+  openEmailPreviewModal(emailSubject,htmlParts,parts);
+}
+var _emailPreviewSubject='';
+var _emailPreviewHtmlParts=[];
+var _emailPreviewParts=[];
+function openEmailPreviewModal(emailSubject,htmlParts,parts){
+  _emailPreviewSubject=emailSubject;
+  _emailPreviewHtmlParts=htmlParts;
+  _emailPreviewParts=parts;
+  var modal=document.getElementById('email-preview-modal');
+  var subjectEl=document.getElementById('email-preview-subject');
+  var bodyEl=document.getElementById('email-preview-body');
+  if(!modal||!subjectEl||!bodyEl) return;
+  subjectEl.textContent=emailSubject;
+  var htmlBody=buildEmailHtmlFromParts(htmlParts);
+  bodyEl.innerHTML=htmlBody;
+  modal.classList.remove('hidden');
+  var sendBtn=document.getElementById('email-preview-send-btn');
+  if(sendBtn){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){sendBtn.focus();});}else{sendBtn.focus();}}
+}
+function closeEmailPreviewModal(){
+  var modal=document.getElementById('email-preview-modal');
+  if(modal) modal.classList.add('hidden');
+}
+function sendFromEmailPreview(){
+  var emailSubject=_emailPreviewSubject;
+  var htmlParts=_emailPreviewHtmlParts;
+  var parts=_emailPreviewParts;
   var body=parts.join('\n\n');
   var htmlBody=buildEmailHtmlFromParts(htmlParts);
   var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
+  var sendBtn=document.getElementById('email-preview-send-btn');
+  if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
   writeFormattedClipboard(htmlBody,body).then(function(){
     var popupWindow=window.open(outlookUrl,'_blank','noopener');
+    closeEmailPreviewModal();
+    if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
     if(!popupWindow){
       showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
       return;
     }
-    showToast('Formatted email copied. Paste into Outlook draft to keep the same styling.');
+    showToast('Formatted email copied \u2014 paste into Outlook draft (Ctrl+V) to keep styling.');
   }).catch(function(){
+    if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
+    closeEmailPreviewModal();
     window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
     showToast('Clipboard unavailable. Opened a plain-text draft instead.');
   });
