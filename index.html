@@ -478,7 +478,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div class="email-preview-body" id="email-preview-body"></div>
     </div>
     <div class="email-preview-divider"></div>
-    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a draft. The formatted content will be copied to your clipboard &mdash; paste it into the Outlook compose window.</div>
+    <div class="email-preview-hint">Review the email above, then click <strong>Open in Outlook</strong> to open a formatted Outlook draft.</div>
     <div class="email-preview-footer">
       <button class="email-preview-cancel-btn" onclick="closeEmailPreviewModal()">Cancel</button>
       <button class="email-preview-send-btn" id="email-preview-send-btn" onclick="sendFromEmailPreview()">&#9993; Open in Outlook</button>
@@ -1108,6 +1108,35 @@ function formatHtmlForEmail(html){
 function buildEmailHtmlFromParts(parts){
   return parts.map(function(part){return '<div style="margin:0 0 16px 0;">'+formatHtmlForEmail(part)+'</div>';}).join('');
 }
+function buildAttachmentReminderHtml(docs){
+  var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
+  var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
+  return '<div style="margin:0 0 16px 0;padding:14px 16px;border:1px solid #FFCD00;border-radius:8px;background:#FFF3CC;color:'+EMAIL_TEXT_COLOR+';"><p style="margin:0 0 8px 0;"><strong>Attachment reminder</strong></p><p style="margin:0 0 8px 0;">Please attach the required documents before you send this email in Outlook.</p>'+items+'<p style="margin:0;background-color:#ffef99;display:inline-block;padding:2px 6px;"><strong>Outlook should remind you again when you click Send if the attachments are still missing.</strong></p></div>';
+}
+function buildAttachmentReminderText(docs){
+  var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
+  var lines=['Attachment reminder','Please attach the required documents before you send this email in Outlook.'];
+  if(names.length){
+    lines.push('Required documents:');
+    names.forEach(function(name){lines.push('- '+name);});
+  }
+  lines.push('Outlook should remind you again when you click Send if the attachments are still missing.');
+  return lines.join('\n');
+}
+function buildDigestEmailHtml(htmlParts,docs){
+  var sections=[];
+  if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
+  return sections.join('')+buildEmailHtmlFromParts(htmlParts);
+}
+function buildDigestEmailText(parts,docs){
+  var sections=[];
+  if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
+  if(parts&&parts.length) sections.push(parts.join('\n\n'));
+  return sections.join('\n\n');
+}
+function buildOutlookComposeUrl(emailSubject,htmlBody){
+  return 'https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(htmlBody);
+}
 function buildDocsAttachmentPromptHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
   var message='<p>Have you attached all required documents before sending this email?</p>';
@@ -1139,20 +1168,21 @@ function confirmDocsAttachment(attached){
   if(attached&&action){action();}
   else if(!attached){showToast('Please attach the required documents and try again.');}
 }
-function openDigestEmailDraft(emailSubject,htmlParts,parts){
-  openEmailPreviewModal(emailSubject,htmlParts,parts);
+function openDigestEmailDraft(emailSubject,htmlParts,parts,docs){
+  openEmailPreviewModal(emailSubject,htmlParts,parts,docs);
 }
-var _emailPreview={subject:'',htmlParts:[],parts:[]};
-function openEmailPreviewModal(emailSubject,htmlParts,parts){
+var _emailPreview={subject:'',htmlParts:[],parts:[],docs:[]};
+function openEmailPreviewModal(emailSubject,htmlParts,parts,docs){
   _emailPreview.subject=emailSubject;
   _emailPreview.htmlParts=htmlParts;
   _emailPreview.parts=parts;
+  _emailPreview.docs=docs||[];
   var modal=document.getElementById('email-preview-modal');
   var subjectEl=document.getElementById('email-preview-subject');
   var bodyEl=document.getElementById('email-preview-body');
   if(!modal||!subjectEl||!bodyEl) return;
   subjectEl.textContent=emailSubject;
-  var htmlBody=buildEmailHtmlFromParts(htmlParts);
+  var htmlBody=buildDigestEmailHtml(htmlParts,_emailPreview.docs);
   bodyEl.innerHTML=htmlBody;
   modal.classList.remove('hidden');
   var sendBtn=document.getElementById('email-preview-send-btn');
@@ -1165,27 +1195,19 @@ function closeEmailPreviewModal(){
 function sendFromEmailPreview(){
   var emailSubject=_emailPreview.subject;
   var htmlParts=_emailPreview.htmlParts;
-  var parts=_emailPreview.parts;
-  var body=parts.join('\n\n');
-  var htmlBody=buildEmailHtmlFromParts(htmlParts);
-  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(emailSubject);
+  var docs=_emailPreview.docs||[];
+  var htmlBody=buildDigestEmailHtml(htmlParts,docs);
+  var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
   var sendBtn=document.getElementById('email-preview-send-btn');
   if(sendBtn){sendBtn.textContent='Opening\u2026';sendBtn.disabled=true;}
-  writeFormattedClipboard(htmlBody,body).then(function(){
-    var popupWindow=window.open(outlookUrl,'_blank','noopener');
-    closeEmailPreviewModal();
-    if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
-    if(!popupWindow){
-      showToast('Outlook pop-up blocked. Use Copy formatted, then paste into Outlook.');
-      return;
-    }
-    showToast('Formatted email copied \u2014 paste into Outlook draft (Ctrl+V) to keep styling.');
-  }).catch(function(){
-    if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
-    closeEmailPreviewModal();
-    window.location.href='mailto:?subject='+encodeURIComponent(emailSubject)+'&body='+encodeURIComponent(body);
-    showToast('Clipboard unavailable. Opened a plain-text draft instead.');
-  });
+  var popupWindow=window.open(outlookUrl,'hr-immigration-outlook-draft','popup=yes,width=1080,height=820,noopener');
+  if(sendBtn){sendBtn.textContent='\u2709 Open in Outlook';sendBtn.disabled=false;}
+  closeEmailPreviewModal();
+  if(!popupWindow){
+    window.location.href=outlookUrl;
+    return;
+  }
+  showToast(docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.');
 }
 function writeFormattedClipboard(html,plain){
   if(!navigator.clipboard||typeof ClipboardItem==='undefined') return Promise.reject(new Error('Your browser does not support copying formatted content.'));
@@ -1227,13 +1249,7 @@ function sendDigestEmail(){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
   if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
-  if(docs.length>0){
-    if(!openDocsAttachmentModal(docs,function(){openDigestEmailDraft(emailSubject,htmlParts,parts);})){
-      showToast('Unable to open attachment confirmation popup.');
-    }
-    return;
-  }
-  openDigestEmailDraft(emailSubject,htmlParts,parts);
+  openDigestEmailDraft(emailSubject,htmlParts,parts,docs);
 }
 function resetForm(){answers={};renderIntake();}
 
