@@ -927,7 +927,6 @@ function copyOutputHTML(){
   try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([p],{type:'text/plain'})})]).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
   catch(e){navigator.clipboard.writeText(p).then(function(){var b=document.getElementById('copy-html-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy formatted';},2000);});}
 }
-var DIGEST_EMAIL_FROM='hrimmigration@ucalgary.ca';
 var DIGEST_EMAIL_SUBJECT='HR Immigration Digest';
 function collectSelectedOutputTextParts(){
   var parts=[];
@@ -965,7 +964,9 @@ function sendDigestEmail(){
   if(docs.length>0){
     htmlLines.push('<br><br><strong>Documents to attach:</strong><ul>'+docs.map(function(d,idx){
       var docName=d.name||(d.path?d.path.replace(/\\/g,'/').split('/').pop():'Document '+(idx+1));
-      var detail=d.url?('Link: <a href="'+escA(d.url)+'" target="_blank" rel="noopener">'+esc(d.url)+'</a>'):(d.path?('File path: '+esc(d.path)):'Locate manually');
+      var detail='Locate manually';
+      if(d.url) detail='Link: <a href="'+escA(d.url)+'" target="_blank" rel="noopener">'+esc(d.url)+'</a>';
+      else if(d.path) detail='File path: '+esc(d.path);
       return '<li><strong>'+esc(docName)+'</strong> ('+detail+')</li>';
     }).join('')+'</ul><p>Attach the documents listed above before sending.</p>');
     lines.push('', 'Documents to attach:');
@@ -978,10 +979,17 @@ function sendDigestEmail(){
   }
   var htmlBody=htmlLines.join('');
   var body=lines.join('\n');
-  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodeURIComponent(DIGEST_EMAIL_SUBJECT)+'&body='+encodeURIComponent(htmlBody||body);
-  var draftWindow=window.open(outlookUrl,'_blank','noopener');
-  if(!draftWindow){
-    window.location.href='mailto:?subject='+encodeURIComponent(DIGEST_EMAIL_SUBJECT)+'&body='+encodeURIComponent(body);
+  var encodedSubject=encodeURIComponent(DIGEST_EMAIL_SUBJECT);
+  var encodedOutlookBody=encodeURIComponent(htmlBody||body);
+  var outlookUrl='https://outlook.office.com/mail/deeplink/compose?subject='+encodedSubject+'&body='+encodedOutlookBody;
+  if(outlookUrl.length>1800){
+    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
+    showToast('Email is too long for Outlook link. Opened your default mail app instead.');
+    return;
+  }
+  var openedWindow=window.open(outlookUrl,'_blank','noopener');
+  if(!openedWindow){
+    window.location.href='mailto:?subject='+encodedSubject+'&body='+encodeURIComponent(body);
     showToast('Outlook pop-up blocked. Opened your default mail app instead.');
     return;
   }
