@@ -1182,19 +1182,26 @@ function buildAttachmentReminderText(docs){
 function normalizeApplicantName(applicantName){
   return String(applicantName||'').trim();
 }
+function replaceApplicantNamePlaceholder(content,applicantName,escapeForHtml){
+  var normalizedApplicantName=normalizeApplicantName(applicantName);
+  var text=String(content||'');
+  if(!normalizedApplicantName) return text;
+  var replacement=escapeForHtml?esc(normalizedApplicantName):normalizedApplicantName;
+  return text.replace(/\[applicant(?:'|’)?s name\]/gi,replacement);
+}
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
-  var normalizedApplicantName=normalizeApplicantName(applicantName);
-  if(normalizedApplicantName) sections.push('<p>Dear '+esc(normalizedApplicantName)+',</p>');
+  var bodyHtml=replaceApplicantNamePlaceholder(buildEmailHtmlFromParts(htmlParts),applicantName,true);
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
-  return sections.join('')+buildEmailHtmlFromParts(htmlParts);
+  sections.push(bodyHtml);
+  return sections.join('');
 }
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
-  var normalizedApplicantName=normalizeApplicantName(applicantName);
-  if(normalizedApplicantName) sections.push('Dear '+normalizedApplicantName+',');
+  var combinedText=(parts||[]).join('\n\n');
+  var bodyText=replaceApplicantNamePlaceholder(combinedText,applicantName,false);
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
-  if(parts&&parts.length) sections.push(parts.join('\n\n'));
+  if(bodyText) sections.push(bodyText);
   return sections.join('\n\n');
 }
 // Temporarily disables a button, swaps in pending text, and returns a function that restores its original state.
