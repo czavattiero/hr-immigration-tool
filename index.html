@@ -1187,7 +1187,7 @@ function replaceApplicantNamePlaceholder(content,applicantName,escapeForHtml){
   var text=String(content||'');
   if(!normalizedApplicantName) return text;
   var replacement=escapeForHtml?esc(normalizedApplicantName):normalizedApplicantName;
-  return text.replace(/\[applicant['’]s name\]/gi,replacement);
+  return text.replace(/\[applicant(?:'|’)?s name\]/gi,replacement);
 }
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
@@ -1198,7 +1198,8 @@ function buildDigestEmailHtml(htmlParts,docs,applicantName){
 }
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
-  var bodyText=replaceApplicantNamePlaceholder((parts&&parts.length)?parts.join('\n\n'):'',applicantName,false);
+  var combinedText=(parts||[]).join('\n\n');
+  var bodyText=replaceApplicantNamePlaceholder(combinedText,applicantName,false);
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(bodyText) sections.push(bodyText);
   return sections.join('\n\n');
