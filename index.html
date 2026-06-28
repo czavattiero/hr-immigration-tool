@@ -1179,16 +1179,19 @@ function buildAttachmentReminderText(docs){
   lines.push('Outlook should remind you again when you click Send if the attachments are still missing.');
   return lines.join('\n');
 }
+function normalizeApplicantName(applicantName){
+  return String(applicantName||'').trim();
+}
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
-  var normalizedApplicantName=String(applicantName||'').trim();
+  var normalizedApplicantName=normalizeApplicantName(applicantName);
   if(normalizedApplicantName) sections.push('<p>Dear '+esc(normalizedApplicantName)+',</p>');
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
   return sections.join('')+buildEmailHtmlFromParts(htmlParts);
 }
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
-  var normalizedApplicantName=String(applicantName||'').trim();
+  var normalizedApplicantName=normalizeApplicantName(applicantName);
   if(normalizedApplicantName) sections.push('Dear '+normalizedApplicantName+',');
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(parts&&parts.length) sections.push(parts.join('\n\n'));
@@ -1386,9 +1389,9 @@ function sendDigestEmail(){
   var htmlParts=collectSelectedOutputHtmlParts(),parts=collectSelectedOutputTextParts(),docs=[];
   var sendBtn=document.getElementById('send-email-btn');
   var nameInput=document.getElementById('applicant-name-input');
-  var applicantName=(nameInput&&nameInput.value.trim())||'';
-  var subjectApplicantName=applicantName||'[applicant\'s name]';
-  var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+subjectApplicantName;
+  var applicantName=normalizeApplicantName(nameInput&&nameInput.value);
+  var subjectNameOrPlaceholder=applicantName||'[applicant\'s name]';
+  var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+subjectNameOrPlaceholder;
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
