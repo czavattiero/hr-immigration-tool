@@ -1163,7 +1163,6 @@ function buildAttachmentReminderHtml(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
   var items=names.length?'<ul style="margin:8px 0 10px 18px;padding:0;">'+names.map(function(name){return '<li style="margin:0 0 4px 0;"><strong>'+esc(name)+'</strong></li>';}).join('')+'</ul>':'';
   return [
-    '<p><strong>Attachment reminder</strong></p>',
     '<p><strong><span style="color: red;">Delete this reminder before sending the email</span></strong></p>',
     '<p>Please attach the required documents before you send this email in Outlook.</p>',
     items,
@@ -1172,7 +1171,7 @@ function buildAttachmentReminderHtml(docs){
 }
 function buildAttachmentReminderText(docs){
   var names=docs.map(function(d,idx){return getDocDisplayName(d,idx);}).filter(Boolean);
-  var lines=['Attachment reminder','Please attach the required documents before you send this email in Outlook.'];
+  var lines=['Please attach the required documents before you send this email in Outlook.'];
   if(names.length){
     lines.push('Required documents:');
     names.forEach(function(name){lines.push('- '+name);});
@@ -1180,13 +1179,20 @@ function buildAttachmentReminderText(docs){
   lines.push('Outlook should remind you again when you click Send if the attachments are still missing.');
   return lines.join('\n');
 }
-function buildDigestEmailHtml(htmlParts,docs){
+function normalizeApplicantName(applicantName){
+  return String(applicantName||'').trim();
+}
+function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
+  var normalizedApplicantName=normalizeApplicantName(applicantName);
+  if(normalizedApplicantName) sections.push('<p>Dear '+esc(normalizedApplicantName)+',</p>');
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
   return sections.join('')+buildEmailHtmlFromParts(htmlParts);
 }
-function buildDigestEmailText(parts,docs){
+function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
+  var normalizedApplicantName=normalizeApplicantName(applicantName);
+  if(normalizedApplicantName) sections.push('Dear '+normalizedApplicantName+',');
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(parts&&parts.length) sections.push(parts.join('\n\n'));
   return sections.join('\n\n');
@@ -1288,9 +1294,9 @@ function downloadEmailEml(emailSubject,htmlBody,plainBody){
   document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},30000); // 30 s gives the browser ample time to begin the download before the Blob URL is revoked.
 }
-function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton){
-  var plainBody=buildDigestEmailText(parts,docs);
-  var htmlBody=buildDigestEmailHtml(htmlParts,docs);
+function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton,applicantName){
+  var plainBody=buildDigestEmailText(parts,docs,applicantName);
+  var htmlBody=buildDigestEmailHtml(htmlParts,docs,applicantName);
   var graphSuccessMessage=docs.length?'Outlook draft opened with an attachment reminder for send time.':'Outlook draft opened.';
   var emlSuccessMessage='Email draft downloaded \u2014 open the file'+(docs.length?', attach the required documents,':'')+', add recipients, and send.';
   var restoreBtn=setButtonPending(sendButton,'Opening\u2026');
@@ -1383,13 +1389,14 @@ function sendDigestEmail(){
   var htmlParts=collectSelectedOutputHtmlParts(),parts=collectSelectedOutputTextParts(),docs=[];
   var sendBtn=document.getElementById('send-email-btn');
   var nameInput=document.getElementById('applicant-name-input');
-  var applicantName=(nameInput&&nameInput.value.trim())||'[applicant\'s name]';
-  var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+applicantName;
+  var applicantName=normalizeApplicantName(nameInput&&nameInput.value);
+  var subjectNameOrPlaceholder=applicantName||'[applicant\'s name]';
+  var emailSubject=DIGEST_EMAIL_SUBJECT_BASE+' - '+subjectNameOrPlaceholder;
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){resolveDocs(rule.docs).forEach(function(d){docs.push(d);});}
   });
   if(htmlParts.length===0&&parts.length===0&&docs.length===0){showToast('Nothing to send yet');return;}
-  openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendBtn);
+  openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendBtn,applicantName);
 }
 function resetForm(){answers={};renderIntake();}
 
