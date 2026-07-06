@@ -794,9 +794,9 @@ function sameVersion(a,b){
 }
 function getLatestSyncTimestamp(){
   var latest=null;
-  [_lastSectionsSyncAt,_lastLibrarySyncAt].forEach(function(ts){
-    if(!ts) return;
-    var time=Date.parse(ts);
+  [_lastSectionsSyncAt,_lastLibrarySyncAt].forEach(function(timestamp){
+    if(!timestamp) return;
+    var time=Date.parse(timestamp);
     if(isNaN(time)) return;
     if(latest===null||time>latest) latest=time;
   });
