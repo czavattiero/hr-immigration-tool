@@ -774,12 +774,19 @@ var _saveTimer      = null;
 var _libSaveTimer   = null;
 
 function rowVersion(row){
-  if(!row) return '';
-  if(row.updated_at) return 'ts:'+row.updated_at;
+  if(!row) return 'missing';
+  var ts=row.updated_at?String(row.updated_at):'';
   var c='';
   if(typeof row.content==='string') c=row.content;
   else if(row.content!=null) c=JSON.stringify(row.content);
-  return 'hash:'+c.length+'_'+hashString(c);
+  return 'ts:'+ts+'|h:'+c.length+'_'+hashString(c);
+}
+function sameVersion(a,b){
+  if(a===b) return true;
+  if(!a||!b) return false;
+  var ai=a.indexOf('|h:'), bi=b.indexOf('|h:');
+  if(ai===-1||bi===-1) return false;
+  return a.substring(ai+3)===b.substring(bi+3);
 }
 /* FNV-1a is used here as a fast, lightweight full-content hash for sync fallbacks. */
 function hashString(str){
@@ -855,13 +862,13 @@ function startPolling(){
       // Compare content hash to detect changes by other editors
       if(si&&si.content){
         var siVersion=rowVersion(si);
-        if(siVersion!==_lastSectionsAt){
+        if(!sameVersion(siVersion,_lastSectionsAt)){
           try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siVersion;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(li&&li.content){
         var liVersion=rowVersion(li);
-        if(liVersion!==_lastLibraryAt){
+        if(!sameVersion(liVersion,_lastLibraryAt)){
           try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=liVersion;try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
