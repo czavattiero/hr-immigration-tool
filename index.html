@@ -389,6 +389,9 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-rules-empty{font-size:13px;color:var(--ink3);font-style:italic;padding:20px 16px;text-align:center}
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
+<!-- EVL: added for Employment Verification Letter tab -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 </head>
 <body>
 
@@ -445,9 +448,71 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   <div class="nav-tab" id="tab-editor" onclick="requestEditorAccess()">
     <span id="tab-lock-icon">&#128274;</span> Edit sections
   </div>
+  <div class="nav-tab" id="tab-evl" onclick="switchTab('evl')">Verification Letters</div>
   <button class="nav-lock-btn" id="nav-lock-btn" style="display:none" onclick="lockEditor()">Lock editor</button>
   <span id="sp-status" style="display:none;font-size:11px;margin-left:12px;font-family:'DM Sans',sans-serif"></span>
 </nav>
+
+<!-- EVL: EMPLOYMENT VERIFICATION LETTER PAGE -->
+<div class="page" id="page-evl">
+  <div class="wrap">
+    <div class="page-header">
+      <h1>Employment Verification Letter generator</h1>
+    </div>
+    <p style="font-size:13.5px;color:var(--ink2,#555);margin-bottom:20px">
+      Upload the HR job summary export (required) and the timesheet report (required only if the employee has
+      hourly positions), enter their Employee ID, then review and edit the table before downloading the .docx.
+    </p>
+
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:480px;margin-bottom:20px">
+      <label style="font-size:13px;font-weight:500">
+        Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
+        <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
+      </label>
+      <span id="evl-job-status" style="font-size:12px;color:var(--ink3,#888)"></span>
+
+      <label style="font-size:13px;font-weight:500">
+        Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
+        <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
+      </label>
+      <span id="evl-time-status" style="font-size:12px;color:var(--ink3,#888)"></span>
+
+      <label style="font-size:13px;font-weight:500">
+        Employee ID
+        <input type="text" id="evl-empl-id" placeholder="e.g. 30072157" style="display:block;margin-top:6px;padding:8px 10px;border:1.5px solid var(--border2,#ccc);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:220px">
+      </label>
+
+      <button class="btn btn-secondary" id="evl-build-btn" onclick="EVL_buildPreview()" style="width:fit-content">Build preview table</button>
+    </div>
+
+    <div id="evl-preview-wrap" style="display:none">
+      <p style="font-size:12.5px;color:var(--ink3,#888);margin-bottom:8px">
+        Click any cell to edit it. The Group Employer Benefit Plan Eligibility column is left blank &mdash; please fill it in manually before downloading.
+      </p>
+      <div style="overflow-x:auto">
+        <table id="evl-preview-table" style="border-collapse:collapse;width:100%;font-size:12px">
+          <thead>
+            <tr style="background:#f2f2f2">
+              <th style="border:1px solid #ccc;padding:6px">Position</th>
+              <th style="border:1px solid #ccc;padding:6px">NOC</th>
+              <th style="border:1px solid #ccc;padding:6px">Faculty</th>
+              <th style="border:1px solid #ccc;padding:6px">Department</th>
+              <th style="border:1px solid #ccc;padding:6px">Employment Status</th>
+              <th style="border:1px solid #ccc;padding:6px">Standard Hours/Week</th>
+              <th style="border:1px solid #ccc;padding:6px">Start Date</th>
+              <th style="border:1px solid #ccc;padding:6px">End Date</th>
+              <th style="border:1px solid #ccc;padding:6px">Salary</th>
+              <th style="border:1px solid #ccc;padding:6px">Group Benefit Plan Eligibility</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary" id="evl-download-btn" onclick="EVL_generateDocx()" style="margin-top:16px">Download .docx</button>
+    </div>
+    <span id="evl-error" style="display:block;color:#b91c1c;font-size:13px;margin-top:10px"></span>
+  </div>
+</div>
 
 <!-- INTAKE PAGE -->
 <div class="page active" id="page-intake">
@@ -844,6 +909,7 @@ function switchTab(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   if(tab==='intake'){answers={};renderIntake();}
   if(tab==='editor')renderEditor();
+  if(tab==='evl'&&typeof EVL_init==='function')EVL_init();
 }
 
 /* ===== INTAKE ===== */
@@ -2346,7 +2412,309 @@ document.addEventListener('input',function(e){
 var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
 loadData();
-// Capture source AFTER full parse — script tag content is now in DOM
+</script>
+<script>
+/* ===== EVL: Employment Verification Letter (additive, self-contained) ===== */
+var EVL_jobRows = [], EVL_timeRows = [], EVL_periods = [], EVL_employeeName = '';
+
+function EVL_init(){
+  var jf = document.getElementById('evl-job-file');
+  var tf = document.getElementById('evl-time-file');
+  if(jf && !jf.dataset.bound){
+    jf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'job'); });
+    jf.dataset.bound = '1';
+  }
+  if(tf && !tf.dataset.bound){
+    tf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'time'); });
+    tf.dataset.bound = '1';
+  }
+}
+
+function EVL_parseFile(file, kind){
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    document.getElementById('evl-error').textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
+    if(kind === 'job'){
+      EVL_jobRows = rows;
+      document.getElementById('evl-job-status').textContent = rows.length + ' rows loaded';
+    } else {
+      EVL_timeRows = rows;
+      document.getElementById('evl-time-status').textContent = rows.length + ' rows loaded';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function EVL_fmtDate(d){
+  if(!(d instanceof Date) || isNaN(d)) return '';
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  return mm + '/' + dd + '/' + d.getFullYear();
+}
+function EVL_fmtDateProse(d){
+  if(!(d instanceof Date) || isNaN(d)) return '';
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+function EVL_fmtMoney(amount, freq){
+  freq = (freq || '').trim();
+  var amt = Number(amount).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if(freq === 'Default NA Hourly') return '$' + amt + ' per hour';
+  if(freq.indexOf('Semester') === 0) return '$' + amt + ' per semester';
+  return '$' + amt + ' per ' + freq + ' (CONFIRM PAY PERIOD LABEL)';
+}
+function EVL_dateKey(d){ return (d instanceof Date) ? d.getTime() : String(d); }
+
+function EVL_buildPeriods(emplId){
+  var rows = EVL_jobRows.filter(function(r){ return String(r['Empl ID']) === String(emplId); });
+  if(!rows.length) throw new Error('No rows found for Empl ID ' + emplId + ' in the job summary file.');
+  EVL_employeeName = (rows[0]['First Name'] || '') + ' ' + (rows[0]['Last'] || '');
+  EVL_employeeName = EVL_employeeName.trim();
+
+  var groups = {};
+  rows.forEach(function(r){
+    var key = r['Empl Record'] + '_' + EVL_dateKey(r['Last Start']);
+    (groups[key] = groups[key] || []).push(r);
+  });
+
+  var periods = [];
+  Object.keys(groups).forEach(function(k){
+    var grp = groups[k];
+    var hire = grp.find(function(r){ return r['Action'] === 'Hire' || r['Action'] === 'Rehire'; });
+    var term = grp.find(function(r){ return r['Action'] === 'Termination'; });
+    if(!hire) return;
+    if(term && term['Reason'] === 'Appointment Cancelled') return;
+
+    var emplType = hire['Empl Type'];
+    var startDate = hire['Last Start'];
+    var endDate = null;
+    if(emplType === 'Hourly'){
+      endDate = term ? term['Eff Date'] : null;
+    } else {
+      endDate = (term && term['Term Date']) ? term['Term Date'] : hire['Expected End Date'];
+    }
+
+    periods.push({
+      emplRecord: hire['Empl Record'],
+      position: hire['Business Title'],
+      noc: hire['NOC'],
+      faculty: hire['Faculty/Unit'],
+      department: hire['Department'],
+      employmentStatus: hire['Full/Part'],
+      emplType: emplType,
+      hoursPerWeek: hire['Stnd Hrs/Wk'],
+      startDate: startDate,
+      endDate: endDate,
+      compRate: hire['Current Comp Rate'],
+      compFreq: hire['Comp Freq']
+    });
+  });
+
+  periods.sort(function(a,b){ return new Date(a.startDate) - new Date(b.startDate); });
+  return periods;
+}
+
+function EVL_totalHours(emplRecord, startDate, endDate){
+  var total = 0;
+  EVL_timeRows.forEach(function(r){
+    if(r['Empl Record'] !== emplRecord) return;
+    var d = r['Rpt Dt'];
+    if(!(d instanceof Date)) return;
+    if(d < startDate) return;
+    if(endDate && d > endDate) return;
+    total += Number(r['# of Hours']) || 0;
+  });
+  return total;
+}
+
+function EVL_buildPreview(){
+  var errEl = document.getElementById('evl-error');
+  errEl.textContent = '';
+  try {
+    var emplId = document.getElementById('evl-empl-id').value.trim();
+    if(!emplId) throw new Error('Enter an Employee ID.');
+    if(!EVL_jobRows.length) throw new Error('Upload the job summary file first.');
+
+    EVL_periods = EVL_buildPeriods(emplId);
+
+    var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
+    if(hasHourly && !EVL_timeRows.length){
+      throw new Error('This employee has hourly position(s). Please also upload the time report file.');
+    }
+
+    EVL_periods.forEach(function(p){
+      if(p.emplType === 'Hourly'){
+        p.hoursWorked = EVL_totalHours(p.emplRecord, p.startDate, p.endDate);
+      }
+    });
+
+    var tbody = document.querySelector('#evl-preview-table tbody');
+    tbody.innerHTML = '';
+    EVL_periods.forEach(function(p){
+      var tr = document.createElement('tr');
+      var hoursCell = (p.emplType === 'Hourly') ? '***' : Number(p.hoursPerWeek).toFixed(2);
+      var vals = [
+        p.position, p.noc, p.faculty, p.department, p.employmentStatus,
+        hoursCell, EVL_fmtDate(p.startDate), EVL_fmtDate(p.endDate),
+        EVL_fmtMoney(p.compRate, p.compFreq), ''
+      ];
+      vals.forEach(function(v){
+        var td = document.createElement('td');
+        td.style.border = '1px solid #ccc';
+        td.style.padding = '6px';
+        td.contentEditable = 'true';
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('evl-preview-wrap').style.display = 'block';
+  } catch(err){
+    errEl.textContent = err.message;
+  }
+}
+
+function EVL_base64ToUint8Array(base64){
+  var binary = atob(base64);
+  var bytes = new Uint8Array(binary.length);
+  for(var i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function EVL_generateDocx(){
+  var errEl = document.getElementById('evl-error');
+  errEl.textContent = '';
+  if(typeof docx === 'undefined'){
+    errEl.textContent = 'The document library failed to load. Check your internet connection and reload the page.';
+    return;
+  }
+  var D = docx;
+
+  var rows = Array.from(document.querySelectorAll('#evl-preview-table tbody tr')).map(function(tr){
+    return Array.from(tr.children).map(function(td){ return td.textContent; });
+  });
+
+  var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
+  var hasGradNote = rows.some(function(r){ return r[9] && r[9].indexOf('**') !== -1; });
+
+  var headerLabels = ['Position','NOC','Faculty','Department','Employment Status','Standard Hours of Work per Week','Employment Start Date','Employment End Date','Salary','Group Employer Benefit Plan* Eligibility'];
+  var colWidths = [1500,700,1300,1200,900,1000,1000,1000,1000,1200];
+
+  function cell(text, bold){
+    return new D.TableCell({
+      verticalAlign: D.VerticalAlign.CENTER,
+      children:[new D.Paragraph({alignment: D.AlignmentType.CENTER, children:[new D.TextRun({text:String(text), bold: !!bold})]})]
+    });
+  }
+
+  var tableRows = [new D.TableRow({children: headerLabels.map(function(h){ return cell(h, true); }), tableHeader:true})];
+  rows.forEach(function(r){
+    tableRows.push(new D.TableRow({children: r.map(function(v){ return cell(v); })}));
+  });
+
+  var table = new D.Table({
+    columnWidths: colWidths,
+    width:{size: colWidths.reduce(function(a,b){return a+b;},0), type: D.WidthType.DXA},
+    rows: tableRows
+  });
+
+  var children = [
+    new D.Paragraph({children:[new D.TextRun({text:'PERSONAL AND CONFIDENTIAL', bold:true})]}),
+    new D.Paragraph({text:''}),
+    new D.Paragraph({alignment: D.AlignmentType.RIGHT, children:[new D.TextRun({text: EVL_fmtDateProse(new Date())})]}),
+    new D.Paragraph({text:''}),
+    new D.Paragraph({text:'To Whom It May Concern,'}),
+    new D.Paragraph({text:''}),
+    new D.Paragraph({alignment: D.AlignmentType.CENTER, children:[new D.TextRun({text:'Re: '}), new D.TextRun({text: EVL_employeeName, bold:true})]}),
+    new D.Paragraph({text:''}),
+    new D.Paragraph({children:[
+      new D.TextRun('This letter is to confirm the employment history, standard hours of work and benefits of '),
+      new D.TextRun({text: EVL_employeeName, bold:true}),
+      new D.TextRun(' for immigration purposes.')
+    ]}),
+    new D.Paragraph({text:''}),
+    table,
+    new D.Paragraph({text:''})
+  ];
+
+  if(hasGradNote){
+    children.push(new D.Paragraph({children:[new D.TextRun({text:'**Graduate Student jobs are not eligible for Group Employment Benefit Plan, but may receive benefit coverage through the Graduate Students\u2019 Association.', italics:true})]}));
+    children.push(new D.Paragraph({text:''}));
+  }
+
+  if(hasHourly){
+    var notes = [];
+    EVL_periods.filter(function(p){ return p.emplType === 'Hourly'; }).forEach(function(p){
+      if(p.endDate){
+        notes.push('For the period of ' + EVL_fmtDateProse(p.startDate) + ' to ' + EVL_fmtDateProse(p.endDate) + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + (Math.round(p.hoursWorked*100)/100) + '.');
+      } else {
+        notes.push('Since ' + EVL_fmtDateProse(p.startDate) + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + (Math.round(p.hoursWorked*100)/100) + '.');
+      }
+    });
+    children.push(new D.Paragraph({children:[new D.TextRun({text:'*** This is an hourly position under which, no minimum number of working hours are set. ' + notes.join(' '), italics:true})]}));
+    children.push(new D.Paragraph({text:''}));
+  }
+
+  children.push(new D.Paragraph({text:'Sincerely,'}));
+  children.push(new D.Paragraph({text:''}));
+  children.push(new D.Paragraph({text:'Immigration Services'}));
+  children.push(new D.Paragraph({text:'hrimmigration@ucalgary.ca'}));
+  children.push(new D.Paragraph({text:'University of Calgary'}));
+
+  var logoImg = document.querySelector('.nav-logo');
+  var headerChildren = [];
+  try {
+    if(logoImg && logoImg.src.indexOf('base64,') !== -1){
+      var base64 = logoImg.src.split('base64,')[1];
+      var imgBytes = EVL_base64ToUint8Array(base64);
+      var headerTable = new D.Table({
+        columnWidths:[2700,8100],
+        width:{size:10800, type:D.WidthType.DXA},
+        borders:{top:{style:D.BorderStyle.NONE},bottom:{style:D.BorderStyle.NONE},left:{style:D.BorderStyle.NONE},right:{style:D.BorderStyle.NONE},insideHorizontal:{style:D.BorderStyle.NONE},insideVertical:{style:D.BorderStyle.NONE}},
+        rows:[new D.TableRow({children:[
+          new D.TableCell({children:[new D.Paragraph({children:[new D.ImageRun({data:imgBytes, transformation:{width:170,height:69}, type:'jpg'})]})]}),
+          new D.TableCell({children:[
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun({text:'People & Culture', bold:true, size:28})]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('2500 University Drive NW')]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('Calgary, AB Canada T2N 1N4')]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('hrimmigration@ucalgary.ca')]})
+          ]})
+        ]})]
+      });
+      headerChildren = [headerTable, new D.Paragraph({text:''})];
+    }
+  } catch(imgErr){ /* if the logo can't be embedded, proceed without it */ }
+
+  var doc = new D.Document({
+    styles:{default:{document:{run:{font:'Calibri', size:22}}}},
+    sections:[{
+      properties:{page:{size:{width:12240,height:15840}, margin:{top:720,bottom:720,left:720,right:720}}},
+      children: headerChildren.concat(children)
+    }]
+  });
+
+  try {
+    var blob = await D.Packer.toBlob(doc);
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'Employment Verification Letter - ' + EVL_employeeName + '.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(genErr){
+    errEl.textContent = 'Could not generate the document: ' + genErr.message;
+  }
+}
 </script>
 </body>
 </html>
