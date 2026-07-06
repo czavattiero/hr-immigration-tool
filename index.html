@@ -129,7 +129,6 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 /* EDITOR */
 .editor-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;padding-bottom:18px;border-bottom:1.5px solid var(--border);gap:16px;flex-wrap:wrap}
 .save-note{font-size:12px;color:var(--ink3);margin-top:6px}
-.sync-note{font-size:12px;color:var(--ink2);margin-top:4px}
 .editor-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start}
 .btn{font-family:"DM Sans",sans-serif;font-size:13px;font-weight:500;border-radius:7px;padding:9px 18px;cursor:pointer;border:none;white-space:nowrap}
 .btn-secondary{background:#fff;color:var(--ink2);border:1.5px solid var(--border2)}
@@ -449,7 +448,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
   <div class="nav-tab" id="tab-editor" onclick="requestEditorAccess()">
     <span id="tab-lock-icon">&#128274;</span> Edit sections
   </div>
-  <div class="nav-tab" id="tab-evl" onclick="switchTab('evl')">Verification Letters</div>
+  <div class="nav-tab" id="tab-evl" onclick="switchTab('evl')">Employment Verification Letters</div>
   <button class="nav-lock-btn" id="nav-lock-btn" style="display:none" onclick="lockEditor()">Lock editor</button>
   <span id="sp-status" style="display:none;font-size:11px;margin-left:12px;font-family:'DM Sans',sans-serif"></span>
 </nav>
@@ -464,6 +463,10 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       Upload the HR job summary export (required) and the timesheet report (required only if the employee has
       hourly positions), enter their Employee ID, then review and edit the table before downloading the .docx.
     </p>
+
+    <div style="background:#f4f8f4;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-bottom:20px;max-width:640px">
+      <p style="font-size:12.5px;color:#2f5233;margin:0"><strong>Your data stays on your device.</strong> This tool does not upload, save, or transmit the spreadsheets you select. All processing &mdash; reading the spreadsheets and generating the Word document &mdash; happens locally in your browser. No employee data is sent to any server, database, or third party. Once you close or refresh this page, the uploaded data is gone.</p>
+    </div>
 
     <div style="display:flex;flex-direction:column;gap:14px;max-width:480px;margin-bottom:20px">
       <label style="font-size:13px;font-weight:500">
@@ -556,7 +559,6 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div class="editor-top">
       <div>
         <div class="save-note">All changes save automatically to Supabase and sync to all editors within 10 seconds.</div>
-        <div class="sync-note" id="last-synced">Last synced: Not yet</div>
       </div>
       <div class="editor-actions">
         <button class="btn btn-secondary btn-sm" onclick="openChangePw()">Change password</button>
@@ -650,7 +652,7 @@ var SB_TABLE = 'hr_tool_data';
 var SB_HDRS  = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
 function sbRead(){
-  return fetch(SB_URL+'/rest/v1/'+SB_TABLE+'?select=title,content,updated_at',{
+  return fetch(SB_URL+'/rest/v1/'+SB_TABLE+'?select=title,content',{
     headers:Object.assign({},SB_HDRS,{'Cache-Control':'no-cache'})
   }).then(function(r){
     if(!r.ok) return r.text().then(function(t){throw new Error('Read failed '+r.status+': '+t);});
@@ -771,60 +773,9 @@ var DOCLIB = JSON.parse(JSON.stringify(DEFAULT_LIB));
 var answers = {};
 var _lastSectionsAt = null;
 var _lastLibraryAt  = null;
-var _lastSectionsSyncAt = null;
-var _lastLibrarySyncAt  = null;
 var _pollTimer      = null;
 var _saveTimer      = null;
 var _libSaveTimer   = null;
-
-function rowVersion(row){
-  if(!row) return 'missing';
-  var ts=row.updated_at?String(row.updated_at):'';
-  var c='';
-  if(typeof row.content==='string') c=row.content;
-  else if(row.content!=null) c=JSON.stringify(row.content);
-  return 'ts:'+ts+'|h:'+c.length+'_'+hashString(c);
-}
-function sameVersion(a,b){
-  if(a===b) return true;
-  if(!a||!b) return false;
-  var ai=a.indexOf('|h:'), bi=b.indexOf('|h:');
-  if(ai===-1||bi===-1) return false;
-  return a.substring(ai+3)===b.substring(bi+3);
-}
-function getLatestSyncTimestamp(){
-  var latest=null;
-  [_lastSectionsSyncAt,_lastLibrarySyncAt].forEach(function(timestamp){
-    if(!timestamp) return;
-    var time=Date.parse(timestamp);
-    if(isNaN(time)) return;
-    if(latest===null||time>latest) latest=time;
-  });
-  return latest;
-}
-function updateLastSynced(){
-  var el=document.getElementById('last-synced');if(!el)return;
-  var latest=getLatestSyncTimestamp();
-  el.textContent='Last synced: '+(latest===null?'Not yet':new Date(latest).toLocaleString());
-}
-function updateSyncTimestampsFromRows(rows){
-  if(!Array.isArray(rows)) return;
-  rows.forEach(function(row){
-    if(!row||!row.title||!row.updated_at) return;
-    if(row.title==='sections') _lastSectionsSyncAt=String(row.updated_at);
-    if(row.title==='library') _lastLibrarySyncAt=String(row.updated_at);
-  });
-  updateLastSynced();
-}
-/* FNV-1a is used here as a fast, lightweight full-content hash for sync fallbacks. */
-function hashString(str){
-  var h=2166136261; // FNV-1a 32-bit offset basis
-  for(var i=0;i<str.length;i++){
-    h^=str.charCodeAt(i);
-    h=Math.imul(h,16777619); // FNV-1a 32-bit prime
-  }
-  return (h>>>0).toString(16);
-}
 
 var LOCAL_KEY='intake_v11_local';
 var LIB_KEY='intake_lib_v2';
@@ -865,9 +816,8 @@ function loadData(){
     var si=rows.find(function(r){return r.title==='sections';});
     var li=rows.find(function(r){return r.title==='library';});
     var changed=false;
-    updateSyncTimestampsFromRows(rows);
-    if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=rowVersion(si);try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
-    if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=rowVersion(li);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
+    if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=si.updated_at;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
+    if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=li.content.length+'_'+li.content.substring(0,50);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
     if(changed)renderIntake();
     setSpStatus(true);
     startPolling();
@@ -887,20 +837,18 @@ function startPolling(){
       var si=rows.find(function(r){return r.title==='sections';});
       var li=rows.find(function(r){return r.title==='library';});
       var changed=false;
-      setSpStatus(true);
-      updateSyncTimestampsFromRows(rows);
       // Only update if remote is newer than what we last saved
       // Compare content hash to detect changes by other editors
       if(si&&si.content){
-        var siVersion=rowVersion(si);
-        if(!sameVersion(siVersion,_lastSectionsAt)){
-          try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siVersion;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
+        var siHash=si.content.length+'_'+si.content.substring(0,50);
+        if(siHash!==_lastSectionsAt){
+          try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siHash;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(li&&li.content){
-        var liVersion=rowVersion(li);
-        if(!sameVersion(liVersion,_lastLibraryAt)){
-          try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=liVersion;try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}
+        var liHash=li.content.length+'_'+li.content.substring(0,50);
+        if(liHash!==_lastLibraryAt){
+          try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=liHash;try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(changed){
@@ -929,16 +877,7 @@ function saveData(){
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     sbWrite('sections',json).then(function(rows){
-      if(rows&&rows[0]){
-        _lastSectionsAt=rowVersion(rows[0]);
-        updateSyncTimestampsFromRows(rows);
-      }
-      else{
-        _lastSectionsAt=rowVersion({content:json});
-        _lastSectionsSyncAt=new Date().toISOString();
-        updateLastSynced();
-        console.warn('saveData(): Supabase did not return row metadata; cross-device sync may be delayed until next successful save');
-      }
+      if(rows&&rows[0]) _lastSectionsAt=json.length+'_'+json.substring(0,50);
       showToast('Saved ✓');
       setSpStatus(true);
     }).catch(function(e){
@@ -954,16 +893,7 @@ function saveLib(){
   saveLibTimer=setTimeout(function(){
     var json=JSON.stringify(DOCLIB);
     sbWrite('library',json).then(function(rows){
-      if(rows&&rows[0]){
-        _lastLibraryAt=rowVersion(rows[0]);
-        updateSyncTimestampsFromRows(rows);
-      }
-      else{
-        _lastLibraryAt=rowVersion({content:json});
-        _lastLibrarySyncAt=new Date().toISOString();
-        updateLastSynced();
-        console.warn('saveLib(): Supabase did not return row metadata; cross-device sync may be delayed until next successful save');
-      }
+      if(rows&&rows[0]) _lastLibraryAt=json.length+'_'+json.substring(0,50);
       showToast('Library saved ✓');
       setSpStatus(true);
     }).catch(function(e){
@@ -2634,10 +2564,18 @@ function EVL_buildPreview(){
     EVL_periods.forEach(function(p){
       var tr = document.createElement('tr');
       var hoursCell = (p.emplType === 'Hourly') ? '***' : Number(p.hoursPerWeek).toFixed(2);
+      var benefitCell = '';
+      if(String(p.position).toLowerCase().indexOf('grad') !== -1){
+        benefitCell = '**';
+      } else if(String(p.position).toLowerCase().indexOf('professor') !== -1){
+        benefitCell = '*';
+      } else if(p.emplType === 'Hourly'){
+        benefitCell = 'No';
+      }
       var vals = [
         p.position, p.noc, p.faculty, p.department, p.employmentStatus,
         hoursCell, EVL_fmtDate(p.startDate), EVL_fmtDate(p.endDate),
-        EVL_fmtMoney(p.compRate, p.compFreq), ''
+        EVL_fmtMoney(p.compRate, p.compFreq), benefitCell
       ];
       vals.forEach(function(v){
         var td = document.createElement('td');
@@ -2678,6 +2616,7 @@ async function EVL_generateDocx(){
 
   var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
   var hasGradNote = rows.some(function(r){ return r[9] && r[9].indexOf('**') !== -1; });
+  var hasProfessorNote = rows.some(function(r){ return r[9] && r[9].trim() === '*'; });
 
   var headerLabels = ['Position','NOC','Faculty','Department','Employment Status','Standard Hours of Work per Week','Employment Start Date','Employment End Date','Salary','Group Employer Benefit Plan* Eligibility'];
   var colWidths = [1500,700,1300,1200,900,1000,1000,1000,1000,1200];
@@ -2719,8 +2658,13 @@ async function EVL_generateDocx(){
     new D.Paragraph({text:''})
   ];
 
+  if(hasProfessorNote){
+    children.push(new D.Paragraph({children:[new D.TextRun({text:'*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.', italics:true})]}));
+    children.push(new D.Paragraph({text:''}));
+  }
+
   if(hasGradNote){
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'**Graduate Student jobs are not eligible for Group Employment Benefit Plan, but may receive benefit coverage through the Graduate Students\u2019 Association.', italics:true})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({text:'** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics:true})]}));
     children.push(new D.Paragraph({text:''}));
   }
 
