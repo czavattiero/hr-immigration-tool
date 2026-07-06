@@ -777,7 +777,15 @@ function rowVersion(row){
   if(!row) return '';
   if(row.updated_at) return 'ts:'+row.updated_at;
   var c=typeof row.content==='string'?row.content:JSON.stringify(row.content||'');
-  return 'hash:'+c.length+'_'+c.substring(0,50);
+  return 'hash:'+c.length+'_'+hashString(c);
+}
+function hashString(str){
+  var h=2166136261;
+  for(var i=0;i<str.length;i++){
+    h^=str.charCodeAt(i);
+    h=Math.imul(h,16777619);
+  }
+  return (h>>>0).toString(16);
 }
 
 var LOCAL_KEY='intake_v11_local';
@@ -881,7 +889,7 @@ function saveData(){
   saveDataTimer=setTimeout(function(){
     sbWrite('sections',json).then(function(rows){
       if(rows&&rows[0]) _lastSectionsAt=rowVersion(rows[0]);
-      else console.warn('saveData: Supabase did not return row metadata; version marker unchanged');
+      else console.warn('saveData: Supabase did not return row metadata; cross-device sync may be delayed until next successful save');
       showToast('Saved ✓');
       setSpStatus(true);
     }).catch(function(e){
@@ -898,7 +906,7 @@ function saveLib(){
     var json=JSON.stringify(DOCLIB);
     sbWrite('library',json).then(function(rows){
       if(rows&&rows[0]) _lastLibraryAt=rowVersion(rows[0]);
-      else console.warn('saveLib: Supabase did not return row metadata; version marker unchanged');
+      else console.warn('saveLib: Supabase did not return row metadata; cross-device sync may be delayed until next successful save');
       showToast('Library saved ✓');
       setSpStatus(true);
     }).catch(function(e){
