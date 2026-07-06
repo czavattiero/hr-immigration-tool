@@ -887,6 +887,7 @@ function startPolling(){
       var si=rows.find(function(r){return r.title==='sections';});
       var li=rows.find(function(r){return r.title==='library';});
       var changed=false;
+      setSpStatus(true);
       applySyncRows(rows);
       // Only update if remote is newer than what we last saved
       // Compare content hash to detect changes by other editors
