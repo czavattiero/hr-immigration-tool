@@ -792,7 +792,7 @@ function sameVersion(a,b){
   if(ai===-1||bi===-1) return false;
   return a.substring(ai+3)===b.substring(bi+3);
 }
-function latestSyncAt(){
+function getLatestSyncTimestamp(){
   var latest=null;
   [_lastSectionsSyncAt,_lastLibrarySyncAt].forEach(function(ts){
     if(!ts) return;
@@ -804,10 +804,10 @@ function latestSyncAt(){
 }
 function updateLastSynced(){
   var el=document.getElementById('last-synced');if(!el)return;
-  var latest=latestSyncAt();
-  el.textContent=latest===null?'Last synced: Not yet':'Last synced: '+new Date(latest).toLocaleString();
+  var latest=getLatestSyncTimestamp();
+  el.textContent='Last synced: '+(latest===null?'Not yet':new Date(latest).toLocaleString());
 }
-function applySyncRows(rows){
+function updateSyncTimestampsFromRows(rows){
   if(!Array.isArray(rows)) return;
   rows.forEach(function(row){
     if(!row||!row.title||!row.updated_at) return;
@@ -865,7 +865,7 @@ function loadData(){
     var si=rows.find(function(r){return r.title==='sections';});
     var li=rows.find(function(r){return r.title==='library';});
     var changed=false;
-    applySyncRows(rows);
+    updateSyncTimestampsFromRows(rows);
     if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=rowVersion(si);try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
     if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=rowVersion(li);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
     if(changed)renderIntake();
@@ -888,7 +888,7 @@ function startPolling(){
       var li=rows.find(function(r){return r.title==='library';});
       var changed=false;
       setSpStatus(true);
-      applySyncRows(rows);
+      updateSyncTimestampsFromRows(rows);
       // Only update if remote is newer than what we last saved
       // Compare content hash to detect changes by other editors
       if(si&&si.content){
@@ -931,7 +931,7 @@ function saveData(){
     sbWrite('sections',json).then(function(rows){
       if(rows&&rows[0]){
         _lastSectionsAt=rowVersion(rows[0]);
-        applySyncRows(rows);
+        updateSyncTimestampsFromRows(rows);
       }
       else{
         _lastSectionsAt=rowVersion({content:json});
@@ -956,7 +956,7 @@ function saveLib(){
     sbWrite('library',json).then(function(rows){
       if(rows&&rows[0]){
         _lastLibraryAt=rowVersion(rows[0]);
-        applySyncRows(rows);
+        updateSyncTimestampsFromRows(rows);
       }
       else{
         _lastLibraryAt=rowVersion({content:json});
