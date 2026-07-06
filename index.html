@@ -648,7 +648,7 @@ var SB_TABLE = 'hr_tool_data';
 var SB_HDRS  = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
 function sbRead(){
-  return fetch(SB_URL+'/rest/v1/'+SB_TABLE+'?select=title,content',{
+  return fetch(SB_URL+'/rest/v1/'+SB_TABLE+'?select=title,content,updated_at',{
     headers:Object.assign({},SB_HDRS,{'Cache-Control':'no-cache'})
   }).then(function(r){
     if(!r.ok) return r.text().then(function(t){throw new Error('Read failed '+r.status+': '+t);});
@@ -773,6 +773,13 @@ var _pollTimer      = null;
 var _saveTimer      = null;
 var _libSaveTimer   = null;
 
+function rowVersion(row){
+  if(!row) return '';
+  if(row.updated_at) return 'ts:'+row.updated_at;
+  var c=typeof row.content==='string'?row.content:JSON.stringify(row.content||'');
+  return 'hash:'+c.length+'_'+c.substring(0,120);
+}
+
 var LOCAL_KEY='intake_v11_local';
 var LIB_KEY='intake_lib_v2';
 var DOC_RULES=[];
@@ -812,8 +819,8 @@ function loadData(){
     var si=rows.find(function(r){return r.title==='sections';});
     var li=rows.find(function(r){return r.title==='library';});
     var changed=false;
-    if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=si.updated_at;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
-    if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=li.content.length+'_'+li.content.substring(0,50);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
+    if(si&&si.content){try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=rowVersion(si);try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}}
+    if(li&&li.content){try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=rowVersion(li);try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}}
     if(changed)renderIntake();
     setSpStatus(true);
     startPolling();
@@ -836,15 +843,15 @@ function startPolling(){
       // Only update if remote is newer than what we last saved
       // Compare content hash to detect changes by other editors
       if(si&&si.content){
-        var siHash=si.content.length+'_'+si.content.substring(0,50);
-        if(siHash!==_lastSectionsAt){
-          try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siHash;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
+        var siVersion=rowVersion(si);
+        if(siVersion!==_lastSectionsAt){
+          try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siVersion;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(li&&li.content){
-        var liHash=li.content.length+'_'+li.content.substring(0,50);
-        if(liHash!==_lastLibraryAt){
-          try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=liHash;try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}
+        var liVersion=rowVersion(li);
+        if(liVersion!==_lastLibraryAt){
+          try{var d2=JSON.parse(li.content);if(Array.isArray(d2)){DOCLIB=d2;_lastLibraryAt=liVersion;try{localStorage.setItem(LIB_KEY,li.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
       if(changed){
@@ -873,7 +880,7 @@ function saveData(){
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     sbWrite('sections',json).then(function(rows){
-      if(rows&&rows[0]) _lastSectionsAt=json.length+'_'+json.substring(0,50);
+      _lastSectionsAt=(rows&&rows[0])?rowVersion(rows[0]):rowVersion({content:json});
       showToast('Saved ✓');
       setSpStatus(true);
     }).catch(function(e){
@@ -889,7 +896,7 @@ function saveLib(){
   saveLibTimer=setTimeout(function(){
     var json=JSON.stringify(DOCLIB);
     sbWrite('library',json).then(function(rows){
-      if(rows&&rows[0]) _lastLibraryAt=json.length+'_'+json.substring(0,50);
+      _lastLibraryAt=(rows&&rows[0])?rowVersion(rows[0]):rowVersion({content:json});
       showToast('Library saved ✓');
       setSpStatus(true);
     }).catch(function(e){
