@@ -1387,33 +1387,33 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton,appli
     if(message) showToast(message);
     return true;
   }
-  // Primary non-Azure path: download a .eml file so Outlook opens it with full HTML
-  // formatting preserved.  Falls back to the compose URL + clipboard approach only if
-  // the browser does not support Blob URLs (extremely unlikely in modern browsers).
+  // Fallback path: download a .eml file so Outlook desktop can still be used if opening
+  // a browser compose window is blocked.
   function openWithEml(){
     try {
       downloadEmailEml(emailSubject,htmlBody,plainBody);
       restoreBtn();
       showToast(emlSuccessMessage);
     } catch(emlErr){
-      console.warn('EML download failed, falling back to compose URL:',emlErr);
-      openWithComposeUrl();
+      console.warn('EML download failed:',emlErr);
+      restoreBtn();
+      showToast('Could not open an email draft. Please try again.');
     }
   }
-  // Last-resort fallback: copy formatted HTML to clipboard and open via compose URL.
-  // Outlook may strip inline styles from the body URL parameter, so the clipboard
-  // copy lets users paste the fully-formatted version with Ctrl+V if needed.
+  // Primary non-Azure path: copy formatted HTML to clipboard and open via compose URL.
+  // Outlook may strip inline styles from the body URL parameter, so the clipboard copy
+  // lets users paste the fully-formatted version with Ctrl+V if needed.
   function openWithComposeUrl(){
     var outlookUrl=buildOutlookComposeUrl(emailSubject,htmlBody);
     var copySuccessMessage=(graphSuccessMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
     var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage);
+      if(!finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage)) openWithEml();
     }).catch(function(){
       if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
-        finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.');
+        if(!finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.')) openWithEml();
       } else {
-        finishOpening(outlookUrl,graphSuccessMessage,'Allow pop-ups and try again.');
+        if(!finishOpening(outlookUrl,graphSuccessMessage,'Allow pop-ups and try again.')) openWithEml();
       }
     });
   }
@@ -1425,10 +1425,10 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton,appli
       finishOpening(draftUrl,graphSuccessMessage,'Allow pop-ups and try again.');
     }).catch(function(graphErr){
       console.warn('Graph API draft creation failed, falling back:',graphErr);
-      openWithEml();
+      openWithComposeUrl();
     });
   } else {
-    openWithEml();
+    openWithComposeUrl();
   }
 }
 function writeFormattedClipboard(html,plain){
