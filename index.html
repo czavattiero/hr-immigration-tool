@@ -1397,7 +1397,7 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton,appli
     } catch(emlErr){
       console.warn('EML download failed:',emlErr);
       restoreBtn();
-      showToast('Could not open an email draft. Please try again.');
+      showToast('Failed to create email draft. Please check your browser settings and try again.');
     }
   }
   // Primary non-Azure path: copy formatted HTML to clipboard and open via compose URL.
@@ -1408,12 +1408,18 @@ function openDigestEmailDraft(emailSubject,htmlParts,parts,docs,sendButton,appli
     var copySuccessMessage=(graphSuccessMessage.replace(/\.$/,'')+' \u2014 formatted email also copied. Paste with Ctrl+V (Cmd+V on Mac) if formatting is missing.');
     var copyBlockedMessage='Allow pop-ups to open draft. Formatted email was copied to clipboard \u2014 paste it once the draft opens.';
     writeFormattedClipboard(htmlBody,plainBody).then(function(){
-      if(!finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage)) openWithEml();
+      if(!finishOpening(outlookUrl,copySuccessMessage,copyBlockedMessage)){
+        openWithEml();
+      }
     }).catch(function(){
       if(getUrlSizeBytes(outlookUrl)>OUTLOOK_COMPOSE_BACKUP_THRESHOLD_BYTES){
-        if(!finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.')) openWithEml();
+        if(!finishOpening(outlookUrl,'Outlook draft opened. Clipboard unavailable \u2014 review formatting after Outlook opens.','Allow pop-ups and try again.')){
+          openWithEml();
+        }
       } else {
-        if(!finishOpening(outlookUrl,graphSuccessMessage,'Allow pop-ups and try again.')) openWithEml();
+        if(!finishOpening(outlookUrl,graphSuccessMessage,'Allow pop-ups and try again.')){
+          openWithEml();
+        }
       }
     });
   }
