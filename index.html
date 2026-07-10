@@ -2282,7 +2282,10 @@ function setRuleCondSec(ri,ci,refSid){
   delete cond.optionIndex;
   delete cond.gdi;
   delete cond.value;
-  if(refSid){var ref=DATA.find(function(r){return r.id===refSid;});if(ref&&ref.type==='grouped'&&ref.dropdowns&&ref.dropdowns.length>0)cond.gdi=0;}
+  if(refSid){
+    var ref=DATA.find(function(r){return r.id===refSid;});
+    if(ref&&ref.type==='grouped'&&ref.dropdowns&&ref.dropdowns.length>0) cond.gdi=0;
+  }
   saveData();renderDocRules();
 }
 function setRuleCondOpt(ri,ci,optIndices){
