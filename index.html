@@ -2151,7 +2151,7 @@ function docRuleConditionsMet(rule){
       var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
       return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;
     }
-    if(ref.type==='grouped'&&c.gdi!=null){return answers[c.sectionId+'__'+c.gdi]===c.value;}
+    if(ref.type==='grouped'){var gdi=c.gdi!=null?c.gdi:0;return answers[c.sectionId+'__'+gdi]===c.value;}
     return false;
   });
 }
@@ -2276,11 +2276,13 @@ function delRuleCond(ri,ci){
 }
 function setRuleCondSec(ri,ci,refSid){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
-  rule.conditions[ci].sectionId=refSid;
-  rule.conditions[ci].optionIndices=[];
-  delete rule.conditions[ci].optionIndex;
-  delete rule.conditions[ci].gdi;
-  delete rule.conditions[ci].value;
+  var cond=rule.conditions[ci];
+  cond.sectionId=refSid;
+  cond.optionIndices=[];
+  delete cond.optionIndex;
+  delete cond.gdi;
+  delete cond.value;
+  if(refSid){var ref=DATA.find(function(r){return r.id===refSid;});if(ref&&ref.type==='grouped'&&ref.dropdowns&&ref.dropdowns.length>0)cond.gdi=0;}
   saveData();renderDocRules();
 }
 function setRuleCondOpt(ri,ci,optIndices){
