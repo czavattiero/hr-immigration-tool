@@ -2153,12 +2153,16 @@ function docRuleConditionsMet(rule){
     if(!ref) return false;
     if(ref.type==='dynamic'){
       var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
-      return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;
+      // Normalise to integers for comparison — multi-select stores as strings
+      var normIndices=indices.map(function(x){return parseInt(x);});
+      var answer=answers[c.sectionId];
+      return normIndices.length>0&&answer!=null&&normIndices.indexOf(parseInt(answer))!==-1;
     }
     if(ref.type==='grouped'){
       var gdi=c.gdi!=null?c.gdi:0;
       var selectedValues=ruleConditionValues(c);
-      return selectedValues.length>0&&selectedValues.indexOf(answers[c.sectionId+'__'+gdi])!==-1;
+      var ans=answers[c.sectionId+'__'+gdi];
+      return selectedValues.length>0&&ans!=null&&selectedValues.indexOf(ans)!==-1;
     }
     return false;
   });
