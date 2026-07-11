@@ -2140,6 +2140,10 @@ function delItemOutput(sid,gdi,ioi){
 function delLibDoc(i){if(!confirm('Remove from library?'))return;DOCLIB.splice(i,1);saveLib();renderDocLib();renderEditor();}
 
 /* ===== DOC RULES ===== */
+function ruleConditionValues(c){
+  return Array.isArray(c.values)?c.values:(c.value!=null&&c.value!==''?[c.value]:[]);
+}
+
 function docRuleConditionsMet(rule){
   if(!rule.conditions||rule.conditions.length===0) return true;
   return rule.conditions.every(function(c){
@@ -2152,7 +2156,7 @@ function docRuleConditionsMet(rule){
     }
     if(ref.type==='grouped'){
       var gdi=c.gdi!=null?c.gdi:0;
-      var selectedValues=Array.isArray(c.values)?c.values:(c.value!=null&&c.value!==''?[c.value]:[]);
+      var selectedValues=ruleConditionValues(c);
       return selectedValues.length>0&&selectedValues.indexOf(answers[c.sectionId+'__'+gdi])!==-1;
     }
     return false;
@@ -2180,7 +2184,7 @@ function buildDocRuleConditionsUI(ri,rule){
       var gdiOpts=drops.map(function(gd,gdi){return '<option value="'+gdi+'"'+(gdiSel===gdi?' selected':'')+'>'+esc(gd.question||'Dropdown '+(gdi+1))+'</option>';}).join('');
       var selDrop=drops[gdiSel]||null;
       var items=selDrop?getDropdownNames(selDrop):[];
-      var selectedValues=Array.isArray(c.values)?c.values:(c.value!=null&&c.value!==''?[c.value]:[]);
+      var selectedValues=ruleConditionValues(c);
       var itemOpts=items.map(function(nm){return '<option value="'+escA(nm)+'"'+(selectedValues.indexOf(nm)>=0?' selected':'')+'>'+esc(nm)+'</option>';}).join('');
       var itemMultiSize=items.length>1?Math.min(items.length,5):2;
       var ariaLabel='Select matching values for '+((selDrop&&selDrop.question)||refSec.label||refSec.question||c.sectionId||'the selected dropdown');
@@ -2313,7 +2317,7 @@ function setRuleCondVal(ri,ci,selectedValues){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
   rule.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=='';}):[];
   delete rule.conditions[ci].value;
-  saveData();
+  saveData();renderDocRules();
 }
 
 /* ===== EVENT DELEGATION ===== */
