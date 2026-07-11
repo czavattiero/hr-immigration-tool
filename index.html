@@ -2477,16 +2477,16 @@ function EVL_init(){
 
 function EVL_handleDragOver(e){
   e.preventDefault();
-  if(e.currentTarget) e.currentTarget.classList.add('drag-over');
+  e.currentTarget.classList.add('drag-over');
 }
 
 function EVL_handleDragLeave(e){
-  if(e.currentTarget) e.currentTarget.classList.remove('drag-over');
+  e.currentTarget.classList.remove('drag-over');
 }
 
 function EVL_handleDrop(e, kind){
   e.preventDefault();
-  if(e.currentTarget) e.currentTarget.classList.remove('drag-over');
+  e.currentTarget.classList.remove('drag-over');
   var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if(!file) return;
 
@@ -2504,7 +2504,9 @@ function EVL_handleDrop(e, kind){
       var dt = new DataTransfer();
       dt.items.add(file);
       input.files = dt.files;
-    } catch(err){}
+    } catch(err){
+      console.warn('Unable to mirror dropped file into input element:', err);
+    }
   }
   EVL_parseFile(file, kind);
 }
