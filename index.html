@@ -2521,8 +2521,7 @@ function EVL_isValidXlsxFile(file){
   if(!file) return false;
   var mime = file.type || '';
   return /\.xlsx$/i.test(file.name || '')
-    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    || mime === 'application/octet-stream';
+    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 }
 
 function EVL_parseFile(file, kind){
@@ -2538,7 +2537,7 @@ function EVL_parseFile(file, kind){
     var rows;
     try {
       var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('missing-sheet');
+      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error();
       var ws = wb.Sheets[wb.SheetNames[0]];
       rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
     } catch(parseErr){
