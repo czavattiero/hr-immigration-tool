@@ -2520,8 +2520,7 @@ function EVL_handleDrop(e, kind){
 function EVL_isValidXlsxFile(file){
   if(!file) return false;
   var mime = file.type || '';
-  return /\.xlsx$/i.test(file.name || '')
-    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  return /\.xlsx$/i.test(file.name || '') || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 }
 
 function EVL_parseFile(file, kind){
@@ -2542,7 +2541,7 @@ function EVL_parseFile(file, kind){
       rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
     } catch(parseErr){
       console.warn('Unable to parse EVL spreadsheet file:', parseErr);
-      if(errEl) errEl.textContent = 'Could not read this spreadsheet. Please use a valid .xlsx export file.';
+      if(errEl) errEl.textContent = parseErr && parseErr.message ? parseErr.message : 'Could not read this spreadsheet. Please use a valid .xlsx export file.';
       return;
     }
     if(kind === 'job'){
