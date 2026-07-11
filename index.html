@@ -337,6 +337,11 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-size:13.5px;padding:11px 22px;border-radius:99px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* EVL upload drop zones */
+.evl-drop-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:10px 12px;background:var(--paper);transition:border-color .15s,background .15s}
+.evl-drop-zone.drag-over{border-color:var(--red);background:#fdf0ee}
+.evl-drop-hint{display:block;font-size:11.5px;color:var(--ink3);margin-top:6px}
+
 /* Conditions */
 .conditions-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .conditions-hdr{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:10px}
@@ -469,16 +474,22 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:14px;max-width:480px;margin-bottom:20px">
-      <label style="font-size:13px;font-weight:500">
-        Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
-        <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
-      </label>
+      <div class="evl-drop-zone" id="evl-job-drop-zone">
+        <label style="font-size:13px;font-weight:500;display:block">
+          Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
+          <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
+        </label>
+      </div>
       <span id="evl-job-status" style="font-size:12px;color:var(--ink3,#888)"></span>
 
-      <label style="font-size:13px;font-weight:500">
-        Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
-        <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
-      </label>
+      <div class="evl-drop-zone" id="evl-time-drop-zone">
+        <label style="font-size:13px;font-weight:500;display:block">
+          Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
+          <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
+        </label>
+      </div>
       <span id="evl-time-status" style="font-size:12px;color:var(--ink3,#888)"></span>
 
       <label style="font-size:13px;font-weight:500">
@@ -2458,6 +2469,8 @@ var EVL_jobRows = [], EVL_timeRows = [], EVL_periods = [], EVL_employeeName = ''
 function EVL_init(){
   var jf = document.getElementById('evl-job-file');
   var tf = document.getElementById('evl-time-file');
+  var jz = document.getElementById('evl-job-drop-zone');
+  var tz = document.getElementById('evl-time-drop-zone');
   if(jf && !jf.dataset.bound){
     jf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'job'); });
     jf.dataset.bound = '1';
@@ -2466,19 +2479,75 @@ function EVL_init(){
     tf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'time'); });
     tf.dataset.bound = '1';
   }
+  if(jz && !jz.dataset.boundDrop){
+    EVL_bindDropZone(jz, 'job');
+  }
+  if(tz && !tz.dataset.boundDrop){
+    EVL_bindDropZone(tz, 'time');
+  }
+}
+
+function EVL_bindDropZone(zone, kind){
+  zone.addEventListener('dragenter', EVL_handleDragOver);
+  zone.addEventListener('dragover', EVL_handleDragOver);
+  zone.addEventListener('dragleave', EVL_handleDragLeave);
+  zone.addEventListener('drop', function(e){ EVL_handleDrop(e, kind); });
+  zone.dataset.boundDrop = '1';
+}
+
+function EVL_handleDragOver(e){
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+
+function EVL_handleDragLeave(e){
+  var nextTarget = e.relatedTarget;
+  if(nextTarget && e.currentTarget.contains(nextTarget)) return;
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function EVL_handleDrop(e, kind){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!file) return;
+
+  var errEl = document.getElementById('evl-error');
+  if(!EVL_isValidXlsxFile(file)){
+    if(errEl) errEl.textContent = 'Please drop an .xlsx file.';
+    return;
+  }
+  if(errEl) errEl.textContent = '';
+  EVL_parseFile(file, kind);
+}
+
+function EVL_isValidXlsxFile(file){
+  if(!file) return false;
+  var mime = file.type || '';
+  return /\.xlsx$/i.test(file.name || '') || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 }
 
 function EVL_parseFile(file, kind){
   if(!file) return;
+  var errEl = document.getElementById('evl-error');
+  if(errEl) errEl.textContent = '';
   if(typeof XLSX === 'undefined'){
-    document.getElementById('evl-error').textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
+    if(errEl) errEl.textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
     return;
   }
   var reader = new FileReader();
   reader.onload = function(e){
-    var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-    var ws = wb.Sheets[wb.SheetNames[0]];
-    var rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
+    var rows;
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('Spreadsheet contains no worksheets');
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
+    } catch(parseErr){
+      console.warn('Unable to parse EVL spreadsheet file (' + kind + '):', file && file.name, parseErr);
+      if(errEl) errEl.textContent = 'Could not read this spreadsheet. Please ensure you are uploading a valid .xlsx export file.';
+      return;
+    }
     if(kind === 'job'){
       EVL_jobRows = rows;
       document.getElementById('evl-job-status').textContent = rows.length + ' rows loaded';
