@@ -337,6 +337,11 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-size:13.5px;padding:11px 22px;border-radius:99px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* EVL upload drop zones */
+.evl-drop-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:10px 12px;background:var(--paper);transition:border-color .15s,background .15s}
+.evl-drop-zone.drag-over{border-color:var(--red);background:#fdf0ee}
+.evl-drop-hint{display:block;font-size:11.5px;color:var(--ink3);margin-top:6px}
+ 
 /* Conditions */
 .conditions-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .conditions-hdr{font-size:12px;font-weight:500;color:var(--ink2);margin-bottom:10px}
@@ -469,16 +474,22 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:14px;max-width:480px;margin-bottom:20px">
-      <label style="font-size:13px;font-weight:500">
-        Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
-        <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
-      </label>
+      <div class="evl-drop-zone" ondragenter="EVL_handleDragOver(event)" ondragover="EVL_handleDragOver(event)" ondragleave="EVL_handleDragLeave(event)" ondrop="EVL_handleDrop(event,'job')">
+        <label style="font-size:13px;font-weight:500;display:block">
+          Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
+          <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
+        </label>
+      </div>
       <span id="evl-job-status" style="font-size:12px;color:var(--ink3,#888)"></span>
 
-      <label style="font-size:13px;font-weight:500">
-        Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
-        <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
-      </label>
+      <div class="evl-drop-zone" ondragenter="EVL_handleDragOver(event)" ondragover="EVL_handleDragOver(event)" ondragleave="EVL_handleDragLeave(event)" ondrop="EVL_handleDrop(event,'time')">
+        <label style="font-size:13px;font-weight:500;display:block">
+          Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
+          <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
+        </label>
+      </div>
       <span id="evl-time-status" style="font-size:12px;color:var(--ink3,#888)"></span>
 
       <label style="font-size:13px;font-weight:500">
@@ -2464,10 +2475,46 @@ function EVL_init(){
   }
 }
 
+function EVL_handleDragOver(e){
+  e.preventDefault();
+  if(e.currentTarget) e.currentTarget.classList.add('drag-over');
+}
+
+function EVL_handleDragLeave(e){
+  if(e.currentTarget) e.currentTarget.classList.remove('drag-over');
+}
+
+function EVL_handleDrop(e, kind){
+  e.preventDefault();
+  if(e.currentTarget) e.currentTarget.classList.remove('drag-over');
+  var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!file) return;
+
+  var isXlsx = /\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  var errEl = document.getElementById('evl-error');
+  if(!isXlsx){
+    if(errEl) errEl.textContent = 'Please drop an .xlsx file.';
+    return;
+  }
+  if(errEl) errEl.textContent = '';
+
+  var input = document.getElementById(kind === 'job' ? 'evl-job-file' : 'evl-time-file');
+  if(input && typeof DataTransfer !== 'undefined'){
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+    } catch(err){}
+  }
+  EVL_parseFile(file, kind);
+}
+
 function EVL_parseFile(file, kind){
   if(!file) return;
+  var errEl = document.getElementById('evl-error');
+  if(errEl) errEl.textContent = '';
   if(typeof XLSX === 'undefined'){
-    document.getElementById('evl-error').textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
+    if(errEl) errEl.textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
     return;
   }
   var reader = new FileReader();
