@@ -2508,25 +2508,21 @@ function EVL_handleDrop(e, kind){
   var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if(!file) return;
 
-  var isXlsx = /\.xlsx$/i.test(file.name || '') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   var errEl = document.getElementById('evl-error');
-  if(!isXlsx){
+  if(!EVL_isValidXlsxFile(file)){
     if(errEl) errEl.textContent = 'Please drop an .xlsx file.';
     return;
   }
   if(errEl) errEl.textContent = '';
-
-  var input = document.getElementById(kind === 'job' ? 'evl-job-file' : 'evl-time-file');
-  if(input && typeof DataTransfer !== 'undefined'){
-    try {
-      var dt = new DataTransfer();
-      dt.items.add(file);
-      input.files = dt.files;
-    } catch(err){
-      console.warn('Unable to mirror dropped file into input element:', err);
-    }
-  }
   EVL_parseFile(file, kind);
+}
+
+function EVL_isValidXlsxFile(file){
+  if(!file) return false;
+  var mime = file.type || '';
+  return /\.xlsx$/i.test(file.name || '')
+    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    || mime === 'application/octet-stream';
 }
 
 function EVL_parseFile(file, kind){
