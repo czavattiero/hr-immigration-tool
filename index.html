@@ -2536,12 +2536,12 @@ function EVL_parseFile(file, kind){
     var rows;
     try {
       var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('Spreadsheet has no sheets.');
+      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('empty-sheet-list');
       var ws = wb.Sheets[wb.SheetNames[0]];
       rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
     } catch(parseErr){
       console.warn('Unable to parse EVL spreadsheet file:', parseErr);
-      if(errEl) errEl.textContent = parseErr && parseErr.message ? parseErr.message : 'Could not read this spreadsheet. Please use a valid .xlsx export file.';
+      if(errEl) errEl.textContent = 'Could not read this spreadsheet. Please ensure you are uploading a valid .xlsx export file.';
       return;
     }
     if(kind === 'job'){
