@@ -1011,7 +1011,7 @@ function getDocumentsFromActiveRules(){
   var docs=[];
   DOC_RULES.forEach(function(rule){
     if(docRuleConditionsMet(rule)){
-      resolveDocs(rule.docs).forEach(function(d){docs.push(d);});
+      docs=docs.concat(resolveDocs(rule.docs));
     }
   });
   return docs;
@@ -2175,7 +2175,7 @@ function buildDocRuleConditionsUI(ri,rule){
       var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
       var optOpts=refSec.options?refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join(''):'';
       var multiSize=refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
-      var ariaLabel='Select matching answers for '+(refSec.label||refSec.question||c.sectionId||('rule condition question '+(ci+1)));
+      var ariaLabel='Select matching answers for '+(refSec.label||refSec.question||c.sectionId||('condition '+(ci+1)));
       answerHtml='<span class="condition-label">=</span>'
         +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers" aria-label="'+escA(ariaLabel)+'">'+optOpts+'</select>';
     } else if(refSec&&refSec.type==='grouped'){
@@ -2187,7 +2187,7 @@ function buildDocRuleConditionsUI(ri,rule){
       var selectedValues=ruleConditionValues(c);
       var itemOpts=items.map(function(nm){return '<option value="'+escA(nm)+'"'+(selectedValues.indexOf(nm)>=0?' selected':'')+'>'+esc(nm)+'</option>';}).join('');
       var itemMultiSize=items.length>1?Math.min(items.length,5):2;
-      var ariaLabel='Select matching values for '+((selDrop&&selDrop.question)||refSec.label||refSec.question||c.sectionId||('rule condition dropdown '+(ci+1)));
+      var ariaLabel='Select matching values for '+((selDrop&&selDrop.question)||refSec.label||refSec.question||c.sectionId||('dropdown condition '+(ci+1)));
       answerHtml=(drops.length>1?'<span class="condition-label">&rarr;</span>'
         +'<select class="condition-select" data-action="setRuleCondGdi" data-ri="'+ri+'" data-ci="'+ci+'">'+gdiOpts+'</select>':'')
         +'<span class="condition-label">=</span>'
