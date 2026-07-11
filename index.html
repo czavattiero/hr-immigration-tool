@@ -2172,7 +2172,7 @@ function buildDocRuleConditionsUI(ri,rule){
       var optOpts=refSec.options?refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join(''):'';
       var multiSize=refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
       answerHtml='<span class="condition-label">=</span>'
-        +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>';
+        +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setRuleCondOpt" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers" aria-label="Select one or more answers">'+optOpts+'</select>';
     } else if(refSec&&refSec.type==='grouped'){
       var drops=refSec.dropdowns||[];
       var gdiSel=c.gdi!=null&&c.gdi<drops.length?c.gdi:0;
@@ -2185,7 +2185,7 @@ function buildDocRuleConditionsUI(ri,rule){
       answerHtml=(drops.length>1?'<span class="condition-label">&rarr;</span>'
         +'<select class="condition-select" data-action="setRuleCondGdi" data-ri="'+ri+'" data-ci="'+ci+'">'+gdiOpts+'</select>':'')
         +'<span class="condition-label">=</span>'
-        +'<select class="condition-select" multiple size="'+itemMultiSize+'" data-action="setRuleCondVal" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+itemOpts+'</select>';
+        +'<select class="condition-select" multiple size="'+itemMultiSize+'" data-action="setRuleCondVal" data-ri="'+ri+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers" aria-label="Select one or more answers">'+itemOpts+'</select>';
     } else {
       answerHtml='<span class="condition-label">=</span>'
         +'<select class="condition-select" disabled><option>-- select question first --</option></select>';
@@ -2307,9 +2307,9 @@ function setRuleCondGdi(ri,ci,gdi){
   delete rule.conditions[ci].values;
   saveData();renderDocRules();
 }
-function setRuleCondVal(ri,ci,vals){
+function setRuleCondVal(ri,ci,values){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
-  rule.conditions[ci].values=Array.isArray(vals)?vals.filter(function(val){return val!=='';}):[];
+  rule.conditions[ci].values=Array.isArray(values)?values.filter(function(val){return val!=='';}):[];
   delete rule.conditions[ci].value;
   saveData();
 }
