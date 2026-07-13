@@ -72,6 +72,7 @@ body{font-family:"DM Sans",sans-serif;background:var(--paper);color:var(--ink);m
 .q-free-input{width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:10px 12px;font-family:"DM Sans",sans-serif;font-size:14px;color:var(--ink);background:var(--paper);outline:none;min-height:100px;resize:vertical;line-height:1.5}
 .q-free-input:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,0,0,.1);background:#fff}
 .q-free-input.selected{border-color:var(--red);background:#fff}
+input.q-free-input{min-height:unset;resize:none}
 .group-badge{display:inline-block;margin-top:8px;padding:4px 11px;border-radius:99px;font-size:12px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
 .name-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px}
 .name-card-label{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px}
@@ -999,9 +1000,15 @@ function renderIntake(){
     } else if(s.type==='freetext'){
       var textVal=answers[s.id]||'';
       var taCls='q-free-input'+(String(textVal).trim()!==''?' selected':'');
-      card.innerHTML='<div class="q-num">Question '+(idx+1)+' of '+visible.length+'</div>'
-        +'<div class="q-text">'+esc(s.question)+'</div>'
-        +'<textarea class="'+taCls+'" data-sid="'+escA(s.id)+'" data-type="freetext" placeholder="Type your response...">'+escT(textVal)+'</textarea>';
+      if(isResearchAwardNameSection(s)){
+        card.innerHTML='<div class="q-num">Question '+(idx+1)+' of '+visible.length+'</div>'
+          +'<div class="q-text">'+esc(s.question)+'</div>'
+          +'<input type="text" class="'+taCls+'" data-sid="'+escA(s.id)+'" data-type="freetext" placeholder="Type your response..." value="'+escA(textVal)+'">';
+      } else {
+        card.innerHTML='<div class="q-num">Question '+(idx+1)+' of '+visible.length+'</div>'
+          +'<div class="q-text">'+esc(s.question)+'</div>'
+          +'<textarea class="'+taCls+'" data-sid="'+escA(s.id)+'" data-type="freetext" placeholder="Type your response...">'+escT(textVal)+'</textarea>';
+      }
     } else {
       var optHtml='<option value="">-- Select an answer --</option>';
       s.options.forEach(function(o,oi){optHtml+='<option value="'+oi+'"'+(answers[s.id]===oi?' selected':'')+'>'+esc(o.label)+'</option>';});
@@ -1012,7 +1019,7 @@ function renderIntake(){
     card.querySelectorAll('select').forEach(function(sel){
       sel.addEventListener('change',function(e){handleChange(e.target.dataset.sid,e.target.value,e.target.dataset.type,e.target.dataset.gdi);});
     });
-    card.querySelectorAll('textarea[data-type="freetext"]').forEach(function(ta){
+    card.querySelectorAll('input[data-type="freetext"],textarea[data-type="freetext"]').forEach(function(ta){
       ta.addEventListener('input',function(e){handleChange(e.target.dataset.sid,e.target.value,e.target.dataset.type,e.target.dataset.gdi);});
     });
     c.appendChild(card);
@@ -1106,6 +1113,7 @@ function renderOutput(){
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     } else if(s.type==='freetext'){
+      if(isResearchAwardNameSection(s)) return;
       var ftHtml=buildFreeTextOutputHtml(s,answers[s.id]);
       if(ftHtml&&htmlToText(ftHtml)) segs.push({label:s.label,html:ftHtml,type:'freetext'});
     }
@@ -1155,7 +1163,7 @@ function collectSelectedOutputHtmlParts(){
     if(s.type==='fixed'){if(s.text) parts.push(replaceResearchAwardNamePlaceholder(s.text,true));}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(replaceResearchAwardNamePlaceholder(o.output,true));}}
     else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);if(h) parts.push(h);});}
-    else if(s.type==='freetext'){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}
+    else if(s.type==='freetext'){if(!isResearchAwardNameSection(s)){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}}
   });
   return parts;
 }
@@ -1332,6 +1340,10 @@ function getFreeTextAnswerByQuestion(questionText){
   var section=DATA.find(function(s){return s.type==='freetext'&&normalizeQuestionText(s.question)===target;});
   if(!section) return '';
   return String(answers[section.id]||'').trim();
+}
+var RESEARCH_AWARD_QUESTION_NORMALIZED=normalizeQuestionText("What's the research award name?");
+function isResearchAwardNameSection(s){
+  return s.type==='freetext'&&normalizeQuestionText(s.question)===RESEARCH_AWARD_QUESTION_NORMALIZED;
 }
 function replaceResearchAwardNamePlaceholder(content,escapeForHtml){
   var text=String(content||'');
@@ -1547,6 +1559,7 @@ function collectSelectedOutputTextParts(){
         if(t) parts.push(htmlToText(t));
       });
     } else if(s.type==='freetext'){
+      if(isResearchAwardNameSection(s)) return;
       var t2=buildFreeTextOutputText(s,answers[s.id]);
       if(t2) parts.push(t2);
     }
