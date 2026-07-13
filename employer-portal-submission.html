@@ -354,11 +354,12 @@ function textToParas(t){
   return t.split(/\n{2,}/).map(function(p){return '<p>'+esc(p).replace(/\n/g,'<br>')+'</p>';}).join('');
 }
 function htmlToText(h){var d=document.createElement('div');d.innerHTML=h;return(d.textContent||d.innerText||'').trim();}
-function replaceCountryOfCitizenshipPlaceholder(content,countryName){
+function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtml){
   var text=String(content||'');
   var normalizedCountry=String(countryName||'').trim();
   if(!normalizedCountry) return text;
-  return text.replace(/\[country of citizenship\]/gi,normalizedCountry);
+  var replacement=escapeForHtml?esc(normalizedCountry):normalizedCountry;
+  return text.replace(/\[country of citizenship\]/gi,replacement);
 }
 
 function renderUser(){

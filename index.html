@@ -1059,7 +1059,7 @@ function renderOutput(){
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var outHtml=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn);
+        var outHtml=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     }
@@ -1108,7 +1108,7 @@ function collectSelectedOutputHtmlParts(){
   DATA.forEach(function(s){
     if(s.type==='fixed'){if(s.text) parts.push(s.text);}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(o.output);}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn);if(h) parts.push(h);});}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);if(h) parts.push(h);});}
   });
   return parts;
 }
@@ -1277,11 +1277,12 @@ function replaceApplicantNamePlaceholder(content,applicantName,escapeForHtml){
   var replacement=escapeForHtml?esc(normalizedApplicantName):normalizedApplicantName;
   return text.replace(/\[applicant(?:'|’)?s name\]/gi,replacement);
 }
-function replaceCountryOfCitizenshipPlaceholder(content,countryName){
+function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtml){
   var text=String(content||'');
   var normalizedCountry=String(countryName||'').trim();
   if(!normalizedCountry) return text;
-  return text.replace(/\[country of citizenship\]/gi,normalizedCountry);
+  var replacement=escapeForHtml?esc(normalizedCountry):normalizedCountry;
+  return text.replace(/\[country of citizenship\]/gi,replacement);
 }
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
@@ -1479,7 +1480,7 @@ function collectSelectedOutputTextParts(){
         var cn=answers[key];
         if(!cn) return;
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var t=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn);
+        var t=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);
         if(t) parts.push(htmlToText(t));
       });
     }
