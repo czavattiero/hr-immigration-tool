@@ -1348,13 +1348,27 @@ function normalizeQuestionText(text){
 }
 function getFreeTextAnswerByQuestion(questionText){
   var target=normalizeQuestionText(questionText);
+  // Try exact match first, then keyword fallback
   var section=DATA.find(function(s){return s.type==='freetext'&&normalizeQuestionText(s.question)===target;});
+  if(!section){
+    // Fallback: find by keywords from the target question
+    var words=target.split(' ').filter(function(w){return w.length>3;});
+    section=DATA.find(function(s){
+      if(s.type!=='freetext') return false;
+      var q=normalizeQuestionText(s.question);
+      return words.every(function(w){return q.indexOf(w)!==-1;});
+    });
+  }
   if(!section) return '';
   return String(answers[section.id]||'').trim();
 }
 var RESEARCH_AWARD_QUESTION_NORMALIZED=normalizeQuestionText("What's the research award name?");
 function isResearchAwardNameSection(s){
-  return s.type==='freetext'&&normalizeQuestionText(s.question)===RESEARCH_AWARD_QUESTION_NORMALIZED;
+  if(s.type!=='freetext') return false;
+  var q=normalizeQuestionText(s.question);
+  // Match exact question OR any freetext question containing 'research award' and 'name'
+  return q===RESEARCH_AWARD_QUESTION_NORMALIZED
+    || (q.indexOf('research award')!==-1 && (q.indexOf('name')!==-1||q.indexOf('letter')!==-1));
 }
 function replaceResearchAwardNamePlaceholder(content,escapeForHtml){
   var text=String(content||'');
