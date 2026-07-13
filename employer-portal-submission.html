@@ -892,6 +892,7 @@ function renderOutput(){
         var cur=answers[key]; if(cur==null) return;
         if(gd.output){
           var lbl=sec.label+((sec.dropdowns.length>1)?(' ('+(gd.question||'Option '+(gdi+1))+')'):'');
+          /* escapeForHtml omitted: gd.output is plain text and textToParas calls esc() internally */
           segs.push({label:lbl,type:'dynamic',html:'<div class="seg-text">'+textToParas(replaceCountryOfCitizenshipPlaceholder(gd.output,cur))+'</div>'});
         }
       });
@@ -945,6 +946,7 @@ function copyOutputHTML(){
         var key=sec.id+'__'+gdi;
         if(answers[key]==null||!gd.output) return;
         var lbl=sec.label+((sec.dropdowns.length>1)?(' ('+(gd.question||'Option '+(gdi+1))+')'):'');
+        /* escapeForHtml omitted: gd.output is plain text and textToParas calls esc() internally */
         parts.push('<p><b>'+esc(lbl)+'</b></p>'+textToParas(replaceCountryOfCitizenshipPlaceholder(gd.output,answers[key])));
       });
     }
