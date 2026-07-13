@@ -1338,7 +1338,7 @@ function replaceResearchAwardNamePlaceholder(content,escapeForHtml){
   var researchAwardName=getFreeTextAnswerByQuestion("What's the research award name?");
   if(!researchAwardName) return text;
   var replacement=escapeForHtml?esc(researchAwardName):researchAwardName;
-  return text.replace(/\[research award(?:'|’)?s name\]/gi,replacement);
+  return text.replace(/\[research award(?:'|')?s (?:name|letter)\]/gi,replacement);
 }
 function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtml){
   var text=String(content||'');
