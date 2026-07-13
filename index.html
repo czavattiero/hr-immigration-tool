@@ -1706,7 +1706,8 @@ function buildBlock(s,i){
     body='<div class="field-row"><label class="field-label">Section label</label>'
       +'<input class="field-input" type="text" value="'+escA(s.label)+'" data-action="upField" data-sid="'+escA(s.id)+'" data-field="label"></div>'
       +'<div class="field-row"><label class="field-label">Question shown to the user</label>'
-      +'<input class="field-input" type="text" value="'+escA(s.question||'')+'" data-action="upField" data-sid="'+escA(s.id)+'" data-field="question"></div>';
+      +'<input class="field-input" type="text" value="'+escA(s.question||'')+'" data-action="upField" data-sid="'+escA(s.id)+'" data-field="question"></div>'
+      +buildConditionsUI(s);
   } else {
     var grpDrops=s.dropdowns||[];
     var grpDropsHtml=grpDrops.map(function(gd,gdi){return buildGroupedDropRow(s.id,gdi,gd);}).join('');
