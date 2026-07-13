@@ -1088,11 +1088,13 @@ function renderOutput(){
   var segs=[],docs=[];
   DATA.forEach(function(s){
     if(s.type==='fixed'){
-      if(s.text&&htmlToText(s.text)) segs.push({label:s.label,html:s.text,type:'fixed'});
+      var fixedHtml=replaceResearchAwardNamePlaceholder(s.text,true);
+      if(fixedHtml&&htmlToText(fixedHtml)) segs.push({label:s.label,html:fixedHtml,type:'fixed'});
     } else if(s.type==='dynamic'){
       var i=answers[s.id]; if(i==null) return;
       var opt=s.options[i]; if(!opt) return;
-      if(opt.output&&htmlToText(opt.output)) segs.push({label:s.label,html:opt.output,type:'dynamic'});
+      var dynamicHtml=replaceResearchAwardNamePlaceholder(opt.output,true);
+      if(dynamicHtml&&htmlToText(dynamicHtml)) segs.push({label:s.label,html:dynamicHtml,type:'dynamic'});
     } else if(s.type==='grouped'){
       /* Each dropdown in this section has its own output */
       (s.dropdowns||[]).forEach(function(gd,gdi){
@@ -1100,7 +1102,7 @@ function renderOutput(){
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var outHtml=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);
+        var outHtml=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     } else if(s.type==='freetext'){
@@ -1150,9 +1152,9 @@ function copyOutputText(){
 function collectSelectedOutputHtmlParts(){
   var parts=[];
   DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(s.text);}
-    else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(o.output);}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);if(h) parts.push(h);});}
+    if(s.type==='fixed'){if(s.text) parts.push(replaceResearchAwardNamePlaceholder(s.text,true));}
+    else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(replaceResearchAwardNamePlaceholder(o.output,true));}}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);if(h) parts.push(h);});}
     else if(s.type==='freetext'){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}
   });
   return parts;
@@ -1322,6 +1324,22 @@ function replaceApplicantNamePlaceholder(content,applicantName,escapeForHtml){
   var replacement=escapeForHtml?esc(normalizedApplicantName):normalizedApplicantName;
   return text.replace(/\[applicant(?:'|’)?s name\]/gi,replacement);
 }
+function normalizeQuestionText(text){
+  return String(text||'').trim().toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ');
+}
+function getFreeTextAnswerByQuestion(questionText){
+  var target=normalizeQuestionText(questionText);
+  var section=DATA.find(function(s){return s.type==='freetext'&&normalizeQuestionText(s.question)===target;});
+  if(!section) return '';
+  return String(answers[section.id]||'').trim();
+}
+function replaceResearchAwardNamePlaceholder(content,escapeForHtml){
+  var text=String(content||'');
+  var researchAwardName=getFreeTextAnswerByQuestion("What's the research award name?");
+  if(!researchAwardName) return text;
+  var replacement=escapeForHtml?esc(researchAwardName):researchAwardName;
+  return text.replace(/\[research award(?:'|’)?s name\]/gi,replacement);
+}
 function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtml){
   var text=String(content||'');
   var normalizedCountry=String(countryName||'').trim();
@@ -1331,7 +1349,7 @@ function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtm
 }
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
-  var bodyHtml=replaceApplicantNamePlaceholder(buildEmailHtmlFromParts(htmlParts),applicantName,true);
+  var bodyHtml=replaceApplicantNamePlaceholder(replaceResearchAwardNamePlaceholder(buildEmailHtmlFromParts(htmlParts),true),applicantName,true);
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
   sections.push(bodyHtml);
   return sections.join('');
@@ -1339,7 +1357,7 @@ function buildDigestEmailHtml(htmlParts,docs,applicantName){
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
   var combinedText=(parts||[]).join('\n\n');
-  var bodyText=replaceApplicantNamePlaceholder(combinedText,applicantName,false);
+  var bodyText=replaceApplicantNamePlaceholder(replaceResearchAwardNamePlaceholder(combinedText,false),applicantName,false);
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(bodyText) sections.push(bodyText);
   return sections.join('\n\n');
@@ -1512,12 +1530,12 @@ function writePlainClipboard(text){
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(s.text));}
+    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(replaceResearchAwardNamePlaceholder(s.text,true)));}
     else if(s.type==='dynamic'){
       var i=answers[s.id];
       if(i!=null){
         var o=s.options[i];
-        if(o&&o.output) parts.push(htmlToText(o.output));
+        if(o&&o.output) parts.push(htmlToText(replaceResearchAwardNamePlaceholder(o.output,true)));
       }
     } else if(s.type==='grouped'){
       (s.dropdowns||[]).forEach(function(gd,gdi){
@@ -1525,7 +1543,7 @@ function collectSelectedOutputTextParts(){
         var cn=answers[key];
         if(!cn) return;
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var t=replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true);
+        var t=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);
         if(t) parts.push(htmlToText(t));
       });
     } else if(s.type==='freetext'){
