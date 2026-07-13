@@ -354,6 +354,12 @@ function textToParas(t){
   return t.split(/\n{2,}/).map(function(p){return '<p>'+esc(p).replace(/\n/g,'<br>')+'</p>';}).join('');
 }
 function htmlToText(h){var d=document.createElement('div');d.innerHTML=h;return(d.textContent||d.innerText||'').trim();}
+function replaceCountryOfCitizenshipPlaceholder(content,countryName){
+  var text=String(content||'');
+  var normalizedCountry=String(countryName||'').trim();
+  if(!normalizedCountry) return text;
+  return text.replace(/\[country of citizenship\]/gi,normalizedCountry);
+}
 
 function renderUser(){
   var c=document.getElementById('sections-container');
@@ -885,7 +891,7 @@ function renderOutput(){
         var cur=answers[key]; if(cur==null) return;
         if(gd.output){
           var lbl=sec.label+((sec.dropdowns.length>1)?(' ('+(gd.question||'Option '+(gdi+1))+')'):'');
-          segs.push({label:lbl,type:'dynamic',html:'<div class="seg-text">'+textToParas(gd.output)+'</div>'});
+          segs.push({label:lbl,type:'dynamic',html:'<div class="seg-text">'+textToParas(replaceCountryOfCitizenshipPlaceholder(gd.output,cur))+'</div>'});
         }
       });
     }
@@ -913,7 +919,7 @@ function copyOutputText(){
         var key=sec.id+'__'+gdi;
         if(answers[key]==null||!gd.output) return;
         var lbl=sec.label+((sec.dropdowns.length>1)?(' ('+(gd.question||'Option '+(gdi+1))+')'):'');
-        parts.push(lbl+'\n'+gd.output);
+        parts.push(lbl+'\n'+replaceCountryOfCitizenshipPlaceholder(gd.output,answers[key]));
       });
     }
   });
@@ -938,7 +944,7 @@ function copyOutputHTML(){
         var key=sec.id+'__'+gdi;
         if(answers[key]==null||!gd.output) return;
         var lbl=sec.label+((sec.dropdowns.length>1)?(' ('+(gd.question||'Option '+(gdi+1))+')'):'');
-        parts.push('<p><b>'+esc(lbl)+'</b></p>'+textToParas(gd.output));
+        parts.push('<p><b>'+esc(lbl)+'</b></p>'+textToParas(replaceCountryOfCitizenshipPlaceholder(gd.output,answers[key])));
       });
     }
   });
