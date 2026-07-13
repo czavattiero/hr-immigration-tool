@@ -1035,10 +1035,11 @@ function handleChange(sid,value,type,gdi){
     answers[sid]=trimmed===''?null:value;
     /* Avoid re-rendering the full intake (which destroys the focused input);
        just update the card's answered class and refresh the output panel. */
-    var el=document.querySelector('[data-sid="'+sid+'"][data-type="freetext"]');
+    var els=document.querySelectorAll('[data-type="freetext"]');
+    var el=null;for(var i=0;i<els.length;i++){if(els[i].dataset.sid===sid){el=els[i];break;}}
     if(el){
       var card=el.closest('.question-card');
-      if(card) card.classList.toggle('answered',answers[sid]!=null);
+      if(card) card.classList.toggle('answered',answers[sid]!==null);
       el.classList.toggle('selected',trimmed!=='');
     }
     renderOutput();
