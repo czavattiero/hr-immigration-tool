@@ -1163,7 +1163,7 @@ function collectSelectedOutputHtmlParts(){
     if(s.type==='fixed'){if(s.text) parts.push(replaceResearchAwardNamePlaceholder(s.text,true));}
     else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(replaceResearchAwardNamePlaceholder(o.output,true));}}
     else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);if(h) parts.push(h);});}
-    else if(s.type==='freetext'){if(isResearchAwardNameSection(s))return;var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}
+    else if(s.type==='freetext'){if(!isResearchAwardNameSection(s)){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}}
   });
   return parts;
 }
@@ -1341,8 +1341,9 @@ function getFreeTextAnswerByQuestion(questionText){
   if(!section) return '';
   return String(answers[section.id]||'').trim();
 }
+var RESEARCH_AWARD_QUESTION_NORMALIZED=normalizeQuestionText("What's the research award name?");
 function isResearchAwardNameSection(s){
-  return s.type==='freetext'&&normalizeQuestionText(s.question)===normalizeQuestionText("What's the research award name?");
+  return s.type==='freetext'&&normalizeQuestionText(s.question)===RESEARCH_AWARD_QUESTION_NORMALIZED;
 }
 function replaceResearchAwardNamePlaceholder(content,escapeForHtml){
   var text=String(content||'');
