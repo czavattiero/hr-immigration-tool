@@ -1033,6 +1033,16 @@ function handleChange(sid,value,type,gdi){
   } else if(type==='freetext'){
     var trimmed=String(value||'').trim();
     answers[sid]=trimmed===''?null:value;
+    /* Avoid re-rendering the full intake (which destroys the focused input);
+       just update the card's answered class and refresh the output panel. */
+    var el=document.querySelector('[data-sid="'+sid+'"][data-type="freetext"]');
+    if(el){
+      var card=el.closest('.question-card');
+      if(card) card.classList.toggle('answered',answers[sid]!=null);
+      el.classList.toggle('selected',trimmed!=='');
+    }
+    renderOutput();
+    return;
   } else if(value==='') answers[sid]=null;
   else if(type==='grouped') answers[sid]=value;
   else answers[sid]=parseInt(value);
