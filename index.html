@@ -3193,25 +3193,30 @@ document.addEventListener('click',function(e){
   if(!el) return;
   var action=el.dataset.action;
   if(!action||!action.startsWith('FAQ_')) return;
-  e.stopPropagation();
   if(action==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
+  if(action==='FAQ_addTopic'){FAQ_addTopic();return;}
   if(action==='FAQ_delTopic'){FAQ_delTopic(el.dataset.tid);return;}
   if(action==='FAQ_moveTopic'){FAQ_moveTopic(el.dataset.tid,parseInt(el.dataset.dir));return;}
+  if(action==='FAQ_addSubtopic'){FAQ_addSubtopic(el.dataset.tid);return;}
+  if(action==='FAQ_delSubtopic'){FAQ_delSubtopic(el.dataset.tid,el.dataset.stid);return;}
+  if(action==='FAQ_moveSubtopic'){FAQ_moveSubtopic(el.dataset.tid,el.dataset.stid,parseInt(el.dataset.dir));return;}
   if(action==='FAQ_addItem'){FAQ_addItem(el.dataset.tid);return;}
-  if(action==='FAQ_delItem'){FAQ_delItem(el.dataset.tid,el.dataset.iid);return;}
-  if(action==='FAQ_addOpt'){FAQ_addOpt(el.dataset.tid,el.dataset.iid);return;}
-  if(action==='FAQ_delOpt'){FAQ_delOpt(el.dataset.tid,el.dataset.iid,parseInt(el.dataset.oi));return;}
-  if(action==='FAQ_addMedia'){FAQ_addMedia(el.dataset.tid,el.dataset.iid);return;}
+  if(action==='FAQ_addSubItem'){FAQ_addSubItem(el.dataset.tid,el.dataset.stid);return;}
+  if(action==='FAQ_delItem'){FAQ_delItem(el.dataset.tid,el.dataset.stid||null,el.dataset.iid);return;}
+  if(action==='FAQ_addOpt'){FAQ_addOpt(el.dataset.iid);return;}
+  if(action==='FAQ_delOpt'){FAQ_delOpt(el.dataset.iid,parseInt(el.dataset.oi));return;}
+  if(action==='FAQ_addMedia'){FAQ_addMedia(el.dataset.iid);return;}
   if(action==='FAQ_delMedia'){FAQ_delMedia(el.dataset.iid,parseInt(el.dataset.mi));return;}
-},true);
+});
 
 document.addEventListener('input',function(e){
   var el=e.target;
   var action=el.dataset&&el.dataset.action;
   if(!action||!action.startsWith('FAQ_')) return;
-  if(action==='FAQ_setTopicTitle') FAQ_setTopicTitle(el.dataset.tid,el.value);
-  else if(action==='FAQ_setQuestion') FAQ_setQuestion(el.dataset.tid,el.dataset.iid,el.value);
-  else if(action==='FAQ_setOptLabel') FAQ_setOptLabel(el.dataset.tid,el.dataset.iid,parseInt(el.dataset.oi),el.value);
+  if(action==='FAQ_setTopicTitle'){FAQ_setTopicTitle(el.dataset.tid,el.value);return;}
+  if(action==='FAQ_setSubtopicTitle'){FAQ_setSubtopicTitle(el.dataset.tid,el.dataset.stid,el.value);return;}
+  if(action==='FAQ_setQuestion'){FAQ_setQuestion(el.dataset.iid,el.value);return;}
+  if(action==='FAQ_setOptLabel'){FAQ_setOptLabel(el.dataset.iid,parseInt(el.dataset.oi),el.value);return;}
   else if(action==='FAQ_setMediaUrl') FAQ_setMediaUrl(el.dataset.iid,parseInt(el.dataset.mi),el.value);
   else if(action==='FAQ_setMediaCaption') FAQ_setMediaCaption(el.dataset.iid,parseInt(el.dataset.mi),el.value);
 });
@@ -3219,9 +3224,9 @@ document.addEventListener('change',function(e){
   var el=e.target;
   var action=el.dataset&&el.dataset.action;
   if(!action||!action.startsWith('FAQ_')) return;
-  if(action==='FAQ_setItemType') FAQ_setItemType(el.dataset.tid,el.dataset.iid,el.value);
-  else if(action==='FAQ_setMediaType') FAQ_setMediaType(el.dataset.iid,parseInt(el.dataset.mi),el.value);
-  else if(action==='FAQ_fileInput'&&el.files&&el.files.length){FAQ_handleFiles(el.dataset.iid,el.files);el.value='';}
+  if(action==='FAQ_setItemType'){FAQ_setItemType(el.dataset.tid,el.dataset.stid||null,el.dataset.iid,el.value);return;}
+  if(action==='FAQ_setMediaType'){FAQ_setMediaType(el.dataset.iid,parseInt(el.dataset.mi),el.value);return;}
+  if(action==='FAQ_fileInput'&&el.files&&el.files.length){FAQ_handleFiles(el.dataset.iid,el.files);el.value='';}
 });
 
 /* ===== INIT ===== */
