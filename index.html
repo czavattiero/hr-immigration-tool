@@ -437,7 +437,14 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .faq-editor-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
 .faq-editor-title{font-size:20px;font-weight:700;color:var(--ink)}
 .faq-topic-block{background:#fff;border:1.5px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
-.faq-topic-block-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--paper);border-bottom:1px solid var(--border);gap:10px}
+.faq-topic-block-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--paper);border-bottom:1px solid var(--border);gap:10px;cursor:pointer;user-select:none}
+.faq-topic-block-hdr:hover{background:var(--paper2)}
+.faq-subtopic-block-hdr{cursor:pointer;user-select:none}
+.faq-subtopic-block-hdr:hover{background:#f7eed8}
+.faq-collapse-arrow{display:inline-block;transition:transform .2s;transform:rotate(-90deg)}
+.faq-collapse-arrow.open{transform:rotate(0deg)}
+.faq-topic-items{display:none;padding:12px 16px}
+.faq-topic-items.open{display:block}
 .faq-topic-name-input{flex:1;border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-size:14px;font-family:'DM Sans',sans-serif;background:#fff}
 .faq-topic-items{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .faq-qa-block{border:1px solid var(--border2);border-radius:8px;padding:12px;background:var(--paper2)}
@@ -2861,17 +2868,19 @@ function FAQ_initItemRTEs(tid,stid,item){
 }
 
 function FAQ_buildTopicBlock(topic,ti){
+  var isOpen=topic._open!==false; // default open
   var directHtml=(topic.items||[]).map(function(item){return FAQ_buildQABlock(topic.id,null,item);}).join('');
   var subtopicHtml=(topic.subtopics||[]).map(function(st,si){return FAQ_buildSubtopicBlock(topic,st,si);}).join('');
   return '<div class="faq-topic-block" id="fedtopic-'+topic.id+'">'
-    +'<div class="faq-topic-block-hdr">'
+    +'<div class="faq-topic-block-hdr" data-action="FAQ_toggleTopic" data-tid="'+topic.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="font-size:11px;color:var(--ink3);flex-shrink:0">&#9660;</span>'
     +'<span style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Topic</span>'
-    +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-tid="'+topic.id+'">'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+'>&#8593;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="1" '+(ti===FAQ_DATA.length-1?'disabled':'')+'>&#8595;</button>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-tid="'+topic.id+'">Delete topic</button>'
+    +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-tid="'+topic.id+'" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+' onclick="event.stopPropagation()">&#8593;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="1" '+(ti===FAQ_DATA.length-1?'disabled':'')+' onclick="event.stopPropagation()">&#8595;</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-tid="'+topic.id+'" onclick="event.stopPropagation()">Delete topic</button>'
     +'</div>'
-    +'<div class="faq-topic-items" id="feditems-'+topic.id+'">'
+    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="feditems-'+topic.id+'">'
     +directHtml
     +'<button class="add-faq-btn" data-action="FAQ_addItem" data-tid="'+topic.id+'">+ Add question</button>'
     +subtopicHtml
@@ -2879,16 +2888,18 @@ function FAQ_buildTopicBlock(topic,ti){
     +'</div></div>';
 }
 function FAQ_buildSubtopicBlock(topic,st,si){
+  var isOpen=st._open!==false; // default open
   var itemsHtml=(st.items||[]).map(function(item){return FAQ_buildQABlock(topic.id,st.id,item);}).join('');
   return '<div class="faq-subtopic-block" id="fedsubtopic-'+st.id+'">'
-    +'<div class="faq-subtopic-block-hdr">'
+    +'<div class="faq-subtopic-block-hdr" data-action="FAQ_toggleSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="font-size:11px;color:var(--amber);flex-shrink:0">&#9660;</span>'
     +'<span style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Subtopic</span>'
-    +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-tid="'+topic.id+'" data-stid="'+st.id+'">'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+((si===(topic.subtopics||[]).length-1)?'disabled':'')+'>&#8595;</button>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'">Delete subtopic</button>'
+    +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+' onclick="event.stopPropagation()">&#8593;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+((si===(topic.subtopics||[]).length-1)?'disabled':'')+' onclick="event.stopPropagation()">&#8595;</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">Delete subtopic</button>'
     +'</div>'
-    +'<div class="faq-topic-items" id="fedsubitems-'+st.id+'">'
+    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedsubitems-'+st.id+'">'
     +itemsHtml
     +'<button class="add-faq-btn" data-action="FAQ_addSubItem" data-tid="'+topic.id+'" data-stid="'+st.id+'">+ Add question</button>'
     +'</div></div>';
@@ -2967,6 +2978,22 @@ function FAQ_findItem(iid){
 }
 
 /* ── Mutations ── */
+function FAQ_toggleTopic(tid){
+  var t=FAQ_findTopic(tid);if(!t)return;
+  t._open=(t._open===false)?true:false;
+  var body=document.getElementById('feditems-'+tid);
+  var arrow=document.querySelector('#fedtopic-'+tid+' .faq-collapse-arrow');
+  if(body)body.classList.toggle('open',t._open);
+  if(arrow)arrow.classList.toggle('open',t._open);
+}
+function FAQ_toggleSubtopic(tid,stid){
+  var st=FAQ_findSubtopic(tid,stid);if(!st)return;
+  st._open=(st._open===false)?true:false;
+  var body=document.getElementById('fedsubitems-'+stid);
+  var arrow=document.querySelector('#fedsubtopic-'+stid+' .faq-collapse-arrow');
+  if(body)body.classList.toggle('open',st._open);
+  if(arrow)arrow.classList.toggle('open',st._open);
+}
 function FAQ_newItem(){return{id:FAQ_qid(),type:'freetext',question:'',answer:'',options:[],media:[]};}
 function FAQ_addTopic(){FAQ_DATA.push({id:FAQ_tid(),title:'',items:[],subtopics:[]});FAQ_save();FAQ_renderEditor();}
 function FAQ_delTopic(tid){if(!confirm('Delete this topic and all its content?'))return;FAQ_DATA=FAQ_DATA.filter(function(t){return t.id!==tid;});FAQ_save();FAQ_renderEditor();}
@@ -3057,6 +3084,8 @@ document.addEventListener('click',function(e){
   if(!a||!a.startsWith('FAQ_'))return;
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
   if(a==='FAQ_addTopic'){FAQ_addTopic();return;}
+  if(a==='FAQ_toggleTopic'){FAQ_toggleTopic(el.dataset.tid);return;}
+  if(a==='FAQ_toggleSubtopic'){FAQ_toggleSubtopic(el.dataset.tid,el.dataset.stid);return;}
   if(a==='FAQ_delTopic'){FAQ_delTopic(el.dataset.tid);return;}
   if(a==='FAQ_moveTopic'){FAQ_moveTopic(el.dataset.tid,parseInt(el.dataset.dir));return;}
   if(a==='FAQ_addSubtopic'){FAQ_addSubtopic(el.dataset.tid);return;}
