@@ -456,6 +456,16 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .faq-media-caption-input{border:1px solid var(--border2);border-radius:5px;padding:4px 8px;font-size:12px;font-family:'DM Sans',sans-serif;width:100%}
 .add-faq-btn{background:none;border:1.5px dashed var(--border2);border-radius:7px;padding:8px 14px;font-size:13px;color:var(--ink3);cursor:pointer;width:100%;text-align:center;transition:all .15s}
 .add-faq-btn:hover{border-color:var(--red);color:var(--red);background:var(--paper)}
+
+/* ── FAQ Upload / Drop Zone ── */
+.faq-drop-zone{border:2px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px;background:var(--paper);transition:all .2s}
+.faq-drop-zone.drag-over{border-color:var(--red);background:#fdeaea;transform:scale(1.01)}
+.faq-drop-icon{font-size:26px}
+.faq-drop-label{font-size:13.5px;font-weight:500;color:var(--ink)}
+.faq-drop-sub{font-size:12px;color:var(--ink3)}
+.faq-media-row-full{margin-bottom:6px}
+.faq-media-thumb{max-width:100%;max-height:80px;border-radius:4px;margin-top:4px;border:1px solid var(--border);object-fit:cover;display:block}
+.faq-upload-progress{font-size:12px;color:var(--amber);font-style:italic;display:block;margin-bottom:4px;padding:4px 8px;background:#fffdf0;border-radius:4px;border:1px solid var(--amber)}
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 <!-- EVL: added for Employment Verification Letter tab -->
@@ -2731,6 +2741,7 @@ function sbWriteKey(key,value){
   }).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t);});return r.json();});
 }
 
+
 /* ── ID generators ── */
 function FAQ_tid(){return 'ft'+Date.now()+Math.random().toString(36).slice(2,6);}
 function FAQ_qid(){return 'fq'+Date.now()+Math.random().toString(36).slice(2,6);}
@@ -2919,6 +2930,7 @@ function FAQ_renderEditor(){
       });
     });
   });
+  FAQ_initDropZones();
 }
 
 function FAQ_buildTopicBlock(topic,ti){
@@ -2958,24 +2970,43 @@ function FAQ_buildQABlock(topic,item,ii){
   }
 
   // Media editor
+  var dropZoneId='faq-drop-'+item.id;
+  var mediaRowsHtml=(item.media||[]).map(function(m,mi){
+    var thumbHtml='';
+    if(m.url&&m.type==='image') thumbHtml='<img class="faq-media-thumb" src="'+escA(m.url)+'" alt="">';
+    var uploadingHtml=m._uploading?'<span class="faq-upload-progress">&#8987; Uploading...</span>':'';
+    return '<div class="faq-media-row-full" id="fmrow-'+item.id+'-'+mi+'">'
+      +uploadingHtml
+      +'<div class="faq-media-row">'
+      +'<select class="faq-media-type-sel" data-action="FAQ_setMediaType" data-iid="'+item.id+'" data-mi="'+mi+'">'
+      +'<option value="image"'+(m.type==='image'?' selected':'')+'>Image</option>'
+      +'<option value="video"'+(m.type==='video'?' selected':'')+'>Video</option>'
+      +'<option value="pdf"'+(m.type==='pdf'?' selected':'')+'>PDF</option>'
+      +'<option value="word"'+(m.type==='word'?' selected':'')+'>Word</option>'
+      +'<option value="ppt"'+(m.type==='ppt'?' selected':'')+'>PowerPoint</option>'
+      +'<option value="link"'+(m.type==='link'?' selected':'')+'>Web link</option>'
+      +'</select>'
+      +'<input class="faq-media-url-input" type="text" value="'+escA(m.url||'')+'" placeholder="URL or paste link..." data-action="FAQ_setMediaUrl" data-iid="'+item.id+'" data-mi="'+mi+'">'
+      +'<input class="faq-media-caption-input" type="text" value="'+escA(m.caption||'')+'" placeholder="Caption" data-action="FAQ_setMediaCaption" data-iid="'+item.id+'" data-mi="'+mi+'" style="max-width:130px">'
+      +'<button class="btn btn-danger btn-sm" data-action="FAQ_delMedia" data-iid="'+item.id+'" data-mi="'+mi+'">&#10005;</button>'
+      +'</div>'
+      +thumbHtml
+      +'</div>';
+  }).join('');
+
   var mediaHtml='<div class="faq-media-editor">'
     +'<div class="faq-media-editor-hdr">&#128206; Media &amp; attachments</div>'
-    +(item.media||[]).map(function(m,mi){
-      return '<div class="faq-media-row" id="fedmedia-'+item.id+'-'+mi+'">'
-        +'<select class="faq-media-type-sel" data-action="FAQ_setMediaType" data-iid="'+item.id+'" data-mi="'+mi+'">'
-        +'<option value="image"'+(m.type==='image'?' selected':'')+'>Image</option>'
-        +'<option value="video"'+(m.type==='video'?' selected':'')+'>Video</option>'
-        +'<option value="pdf"'+(m.type==='pdf'?' selected':'')+'>PDF</option>'
-        +'<option value="word"'+(m.type==='word'?' selected':'')+'>Word</option>'
-        +'<option value="ppt"'+(m.type==='ppt'?' selected':'')+'>PowerPoint</option>'
-        +'<option value="link"'+(m.type==='link'?' selected':'')+'>Web link</option>'
-        +'</select>'
-        +'<input class="faq-media-url-input" type="url" value="'+escA(m.url||'')+'" placeholder="URL or paste link..." data-action="FAQ_setMediaUrl" data-iid="'+item.id+'" data-mi="'+mi+'">'
-        +'<input class="faq-media-caption-input" type="text" value="'+escA(m.caption||'')+'" placeholder="Caption / label" data-action="FAQ_setMediaCaption" data-iid="'+item.id+'" data-mi="'+mi+'" style="max-width:180px">'
-        +'<button class="btn btn-danger btn-sm" data-action="FAQ_delMedia" data-iid="'+item.id+'" data-mi="'+mi+'">x</button>'
-        +'</div>';
-    }).join('')
-    +'<button class="add-faq-btn" style="margin-top:4px" data-action="FAQ_addMedia" data-tid="'+topic.id+'" data-iid="'+item.id+'">+ Add media / attachment</button>'
+    +mediaRowsHtml
+    +'<div class="faq-drop-zone" id="'+dropZoneId+'" data-iid="'+item.id+'" data-action="FAQ_dropZone">'
+      +'<span class="faq-drop-icon">&#128229;</span>'
+      +'<span class="faq-drop-label">Drag &amp; drop files here</span>'
+      +'<span class="faq-drop-sub">Images, video, PDF, Word, PowerPoint</span>'
+      +'<label class="btn btn-secondary btn-sm" style="cursor:pointer;margin-top:6px">Browse files'
+        +'<input type="file" data-iid="'+item.id+'" data-action="FAQ_fileInput" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx" style="display:none">'
+      +'</label>'
+      +'<span style="color:var(--ink3);font-size:12px;margin:4px 0">or</span>'
+      +'<button class="add-faq-btn" style="display:inline-flex;width:auto;padding:5px 14px;margin:0" data-action="FAQ_addMedia" data-iid="'+item.id+'">+ Add link / URL</button>'
+    +'</div>'
     +'</div>';
 
   return '<div class="faq-qa-block" id="fedqa-'+topic.id+'-'+item.id+'">'
@@ -2992,13 +3023,6 @@ function FAQ_buildQABlock(topic,item,ii){
     +'</div>';
 }
 
-/* RTE for FAQ (simplified — reuse main RTE builder/init) */
-function FAQ_buildRTE(id,html){
-  return buildRTE(id,html,false);
-}
-function FAQ_initRTE(id,onchange){
-  initRTE(id,onchange);
-}
 
 /* ── Editor mutations ── */
 function FAQ_addTopic(){
@@ -3102,6 +3126,68 @@ function FAQ_importBackup(ev){
 }
 
 /* ── Event delegation for FAQ editor clicks and inputs ── */
+
+/* ── File upload & drag-drop ── */
+function FAQ_getMediaType(file){
+  var ext=(file.name||'').split('.').pop().toLowerCase();
+  var mime=file.type||'';
+  if(mime.startsWith('image/')||['jpg','jpeg','png','gif','webp','svg'].indexOf(ext)>=0) return 'image';
+  if(mime.startsWith('video/')||['mp4','mov','avi','webm','mkv'].indexOf(ext)>=0) return 'video';
+  if(ext==='pdf'||mime==='application/pdf') return 'pdf';
+  if(['doc','docx'].indexOf(ext)>=0) return 'word';
+  if(['ppt','pptx'].indexOf(ext)>=0) return 'ppt';
+  return 'link';
+}
+function FAQ_uploadFile(file){
+  var SB_BUCKET='faq-media';
+  var safeName=Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  return fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+safeName,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
+    body:file
+  }).then(function(r){
+    if(!r.ok)return r.text().then(function(t){throw new Error('Upload failed '+r.status+': '+t);});
+    return SB_URL+'/storage/v1/object/public/'+SB_BUCKET+'/'+safeName;
+  });
+}
+function FAQ_handleFiles(iid,files){
+  if(!files||!files.length) return;
+  var item=FAQ_findItem(iid); if(!item) return;
+  item.media=item.media||[];
+  Array.from(files).forEach(function(file){
+    var mediaType=FAQ_getMediaType(file);
+    var placeholder={type:mediaType,url:'',caption:file.name,_uploading:true};
+    item.media.push(placeholder);
+    FAQ_renderEditor();
+    FAQ_uploadFile(file).then(function(url){
+      var it=FAQ_findItem(iid); if(!it) return;
+      var upIdx=it.media.findIndex(function(m){return m._uploading&&m.caption===file.name;});
+      if(upIdx>=0){it.media[upIdx].url=url;delete it.media[upIdx]._uploading;}
+      FAQ_save(); FAQ_renderEditor();
+      showToast(file.name+' uploaded ✓');
+    }).catch(function(err){
+      var it=FAQ_findItem(iid); if(!it) return;
+      var upIdx=it.media.findIndex(function(m){return m._uploading&&m.caption===file.name;});
+      if(upIdx>=0) it.media.splice(upIdx,1);
+      FAQ_renderEditor();
+      showToast('Upload failed: '+err.message);
+    });
+  });
+}
+function FAQ_initDropZones(){
+  document.querySelectorAll('.faq-drop-zone[data-iid]').forEach(function(zone){
+    if(zone._dropInit) return;
+    zone._dropInit=true;
+    var iid=zone.dataset.iid;
+    zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('drag-over');});
+    zone.addEventListener('dragleave',function(){zone.classList.remove('drag-over');});
+    zone.addEventListener('drop',function(e){
+      e.preventDefault();zone.classList.remove('drag-over');
+      FAQ_handleFiles(iid,e.dataTransfer.files);
+    });
+  });
+}
+
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');
   if(!el) return;
@@ -3135,6 +3221,7 @@ document.addEventListener('change',function(e){
   if(!action||!action.startsWith('FAQ_')) return;
   if(action==='FAQ_setItemType') FAQ_setItemType(el.dataset.tid,el.dataset.iid,el.value);
   else if(action==='FAQ_setMediaType') FAQ_setMediaType(el.dataset.iid,parseInt(el.dataset.mi),el.value);
+  else if(action==='FAQ_fileInput'&&el.files&&el.files.length){FAQ_handleFiles(el.dataset.iid,el.files);el.value='';}
 });
 
 /* ===== INIT ===== */
