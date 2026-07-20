@@ -411,6 +411,12 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .faq-no-results{text-align:center;padding:40px 20px;color:var(--ink3);font-size:15px}
 .faq-topic{margin-bottom:28px}
 .faq-topic-title{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--darkred);padding:0 0 8px;border-bottom:2px solid var(--red);margin-bottom:4px}
+.faq-topic-title-collapsible{cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px;padding:8px 4px;border-radius:4px;margin-bottom:0}
+.faq-topic-title-collapsible:hover{background:rgba(180,0,0,.06)}
+.faq-topic-arrow{font-size:10px;color:var(--darkred);transition:transform .2s;transform:rotate(-90deg);flex-shrink:0}
+.faq-topic-arrow.open{transform:rotate(0deg)}
+.faq-topic-body{display:none;padding-top:8px}
+.faq-topic-body.open{display:block}
 .faq-item{border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;background:#fff}
 .faq-item.hidden{display:none}
 .faq-item-hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;user-select:none;transition:background .15s;gap:12px}
@@ -2765,19 +2771,38 @@ function FAQ_render(){
     }).filter(function(x){return x.items.length>0;});
     if(!directItems.length&&!matchedSubtopics.length)return '';
     totalVisible+=directItems.length+matchedSubtopics.reduce(function(a,x){return a+x.items.length;},0);
-    var html='<div class="faq-topic" id="ftopic-'+topic.id+'"><div class="faq-topic-title">'+esc(topic.title||'General')+'</div>';
+    // Topics are open when searching, otherwise respect stored state (default open)
+    var isOpen=term?true:(topic._userOpen!==false);
+    var bodyId='faq-topic-body-'+topic.id;
+    var html='<div class="faq-topic" id="ftopic-'+topic.id+'">'
+      +'<div class="faq-topic-title faq-topic-title-collapsible" data-action="FAQ_toggleUserTopic" data-tid="'+escA(topic.id)+'">' 
+      +'<span class="faq-topic-arrow'+(isOpen?' open':'')+'" id="faq-tarrow-'+topic.id+'">&#9660;</span>'
+      +esc(topic.title||'General')
+      +'</div>'
+      +'<div class="faq-topic-body'+(isOpen?' open':'')+'" id="'+bodyId+'">';
     html+=directItems.map(function(it){return FAQ_renderItem(it,term);}).join('');
     html+=matchedSubtopics.map(function(x){
       return '<div class="faq-subtopic"><div class="faq-subtopic-title">'+esc(x.st.title||'')+'</div>'
         +x.items.map(function(it){return FAQ_renderItem(it,term);}).join('')+'</div>';
     }).join('');
-    return html+'</div>';
+    html+='</div></div>';
+    return html;
   }).join('');
   if(emptyEl)emptyEl.style.display=(totalVisible===0&&term)?'block':'none';
   if(term){
     container.querySelectorAll('.faq-item-hdr').forEach(function(h){h.classList.add('open');});
     container.querySelectorAll('.faq-item-body').forEach(function(b){b.classList.add('open');});
   }
+}
+
+function FAQ_toggleUserTopic(tid){
+  var topic=FAQ_DATA.find(function(t){return t.id===tid;});
+  if(!topic)return;
+  topic._userOpen=(topic._userOpen===false)?true:false;
+  var body=document.getElementById('faq-topic-body-'+tid);
+  var arrow=document.getElementById('faq-tarrow-'+tid);
+  if(body)body.classList.toggle('open',topic._userOpen);
+  if(arrow)arrow.classList.toggle('open',topic._userOpen);
 }
 function FAQ_itemMatches(item,term){
   if(!term)return true;
@@ -3082,6 +3107,7 @@ document.addEventListener('click',function(e){
   var a=el.dataset.action;
   if(!a||!a.startsWith('FAQ_'))return;
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
+  if(a==='FAQ_toggleUserTopic'){FAQ_toggleUserTopic(el.dataset.tid);return;}
   if(a==='FAQ_addTopic'){FAQ_addTopic();return;}
   if(a==='FAQ_toggleTopic'){FAQ_toggleTopic(el.dataset.tid);return;}
   if(a==='FAQ_toggleSubtopic'){FAQ_toggleSubtopic(el.dataset.tid,el.dataset.stid);return;}
@@ -3120,8 +3146,7 @@ document.addEventListener('change',function(e){
 var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
 loadData();
-FAQ_load();
-</script>
+FAQ_load();</script>
 <script>
 /* ===== EVL: Employment Verification Letter (additive, self-contained) ===== */
 var EVL_jobRows = [], EVL_timeRows = [], EVL_periods = [], EVL_employeeName = '';
