@@ -482,6 +482,30 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 /* FAQ user view — subtopic titles */
 .faq-subtopic{margin-top:14px;margin-left:0;border-left:3px solid var(--amber);padding-left:12px}
 .faq-subtopic-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#5a3a00;margin-bottom:8px;padding:5px 8px;background:#fff8ed;border-radius:0 4px 4px 0}
+
+/* FAQ section (user view) */
+.faq-section{margin-bottom:20px}
+.faq-section-title{font-size:15px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--red);padding:10px 14px;border-radius:7px;margin-bottom:8px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.faq-section-title:hover{background:var(--darkred)}
+.faq-section-arrow{font-size:10px;display:inline-block;transition:transform .2s;transform:rotate(-90deg);flex-shrink:0}
+.faq-section-arrow.open{transform:rotate(0deg)}
+.faq-section-body{display:none;padding-left:0}
+.faq-section-body.open{display:block}
+/* FAQ Q&A collapsible in editor */
+.faq-qa-hdr{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--paper);border-radius:6px 6px 0 0;cursor:pointer;user-select:none;border:1px solid var(--border2)}
+.faq-qa-hdr:hover{background:var(--paper2)}
+.faq-qa-hdr-q{flex:1;font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.faq-qa-body{display:none;padding:10px 12px;border:1px solid var(--border2);border-top:none;border-radius:0 0 6px 6px;background:#fff}
+.faq-qa-body.open{display:block}
+/* Media body collapsible */
+.faq-media-body{display:none}
+.faq-media-body.open{display:block}
+/* Section hdr in editor */
+.faq-section-hdr{background:var(--red)!important}
+.faq-section-hdr span, .faq-section-hdr input{color:#fff!important}
+.faq-section-hdr .faq-topic-name-input{background:rgba(255,255,255,.15)!important;border-color:rgba(255,255,255,.3)!important;color:#fff!important}
+.faq-section-hdr .faq-topic-name-input::placeholder{color:rgba(255,255,255,.6)!important}
+
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 <!-- EVL: added for Employment Verification Letter tab -->
@@ -752,7 +776,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     </div>
     <div class="save-note" style="margin-bottom:16px">All FAQ changes save automatically to Supabase and sync to all editors within 10 seconds.</div>
     <div id="faq-editor-topics"></div>
-    <button class="add-faq-btn" onclick="FAQ_addTopic()" style="margin-bottom:20px">+ Add topic section</button>
+    <button class="add-faq-btn" data-action="FAQ_addSection" style="margin-bottom:20px">+ Add section</button>
   </div>
 </div>
 
@@ -2709,12 +2733,36 @@ document.addEventListener('input',function(e){
 
 
 /* ===== FAQ MODULE ===== */
+/*
+  Data model:
+  FAQ_DATA = [
+    { id, title, _open,          // Section (top-level)
+      topics: [
+        { id, title, _open,      // Topic
+          subtopics: [
+            { id, title, _open,  // Subtopic
+              items: [...] }
+          ],
+          items: [               // Direct Q&As under topic
+            { id, type, question, answer, _open,
+              options:[{label,answer}],
+              media:[{type,url,caption}] }
+          ]
+        }
+      ]
+    }
+  ]
+  Legacy support: if FAQ_DATA[i] has .items/.subtopics directly (old format),
+  it is treated as a single implicit section.
+*/
+
 var FAQ_DATA=[];
 var FAQ_SEARCH_TERM='';
 var FAQ_SAVE_TIMER=null;
 var FAQ_LAST_HASH=null;
 var FAQ_POLL_TIMER=null;
 
+/* ── Supabase helpers ── */
 function sbReadKey(key){
   return fetch(SB_URL+'/rest/v1/'+SB_TABLE+'?select=title,content&title=eq.'+encodeURIComponent(key),{
     headers:Object.assign({},SB_HDRS,{'Cache-Control':'no-cache'})
@@ -2728,9 +2776,24 @@ function sbWriteKey(key,value){
   }).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t);});return r.json();});
 }
 
+/* ── Load / Save / Poll ── */
 function FAQ_load(){
   sbReadKey('faq_data').then(function(row){
-    if(row&&row.content){try{var d=JSON.parse(row.content);if(Array.isArray(d)){FAQ_DATA=d;FAQ_LAST_HASH=row.content.length+'_'+row.content.substring(0,50);}}catch(e){}}
+    if(row&&row.content){
+      try{var d=JSON.parse(row.content);
+        if(Array.isArray(d)){
+          // Migrate old format (array of topics) to new format (array of sections)
+          if(d.length&&(d[0].items!==undefined||d[0].subtopics!==undefined)&&d[0].topics===undefined){
+            d=[{id:FAQ_sid(),title:'General',_open:true,topics:d.map(function(t){
+              return {id:t.id,title:t.title,_open:t._open!==false,
+                subtopics:(t.subtopics||[]).map(function(st){return {id:st.id,title:st.title,_open:st._open!==false,items:st.items||[]};}) ,
+                items:t.items||[]};
+            })}];
+          }
+          FAQ_DATA=d;FAQ_LAST_HASH=row.content.length+'_'+row.content.substring(0,50);
+        }
+      }catch(e){}
+    }
     FAQ_render();FAQ_startPolling();
   }).catch(function(){FAQ_render();});
 }
@@ -2738,8 +2801,9 @@ function FAQ_save(){
   clearTimeout(FAQ_SAVE_TIMER);
   FAQ_SAVE_TIMER=setTimeout(function(){
     var json=JSON.stringify(FAQ_DATA);
-    sbWriteKey('faq_data',json).then(function(){FAQ_LAST_HASH=json.length+'_'+json.substring(0,50);showToast('FAQ saved ✓');})
-    .catch(function(){showToast('FAQ saved locally');});
+    sbWriteKey('faq_data',json).then(function(){
+      FAQ_LAST_HASH=json.length+'_'+json.substring(0,50);showToast('FAQ saved \u2713');
+    }).catch(function(){showToast('FAQ saved locally');});
   },1500);
 }
 function FAQ_startPolling(){
@@ -2757,46 +2821,69 @@ function FAQ_startPolling(){
   },10000);
 }
 
-function FAQ_tid(){return 'ft'+Date.now()+Math.random().toString(36).slice(2,6);}
-function FAQ_stid(){return 'fs'+Date.now()+Math.random().toString(36).slice(2,6);}
-function FAQ_qid(){return 'fq'+Date.now()+Math.random().toString(36).slice(2,6);}
+/* ── ID generators ── */
+function FAQ_sid(){return 'sec'+Date.now()+Math.random().toString(36).slice(2,5);}
+function FAQ_tid(){return 'ft'+Date.now()+Math.random().toString(36).slice(2,5);}
+function FAQ_stid(){return 'fs'+Date.now()+Math.random().toString(36).slice(2,5);}
+function FAQ_qid(){return 'fq'+Date.now()+Math.random().toString(36).slice(2,5);}
 
+/* ── Search ── */
 function FAQ_search(term){FAQ_SEARCH_TERM=term.trim().toLowerCase();FAQ_render();}
 
+/* ════════════════════════════════════════
+   USER VIEW
+════════════════════════════════════════ */
 function FAQ_render(){
   var container=document.getElementById('faq-topics');
   var emptyEl=document.getElementById('faq-empty');
   if(!container)return;
-  if(!FAQ_DATA||FAQ_DATA.length===0){
+  if(!FAQ_DATA||!FAQ_DATA.length){
     container.innerHTML='<div class="faq-no-results">No FAQ content yet.</div>';
     if(emptyEl)emptyEl.style.display='none';return;
   }
   var term=FAQ_SEARCH_TERM,totalVisible=0;
-  container.innerHTML=FAQ_DATA.map(function(topic){
-    var directItems=(topic.items||[]).filter(function(it){return FAQ_itemMatches(it,term);});
-    var matchedSubtopics=(topic.subtopics||[]).map(function(st){
-      var stItems=(st.items||[]).filter(function(it){return FAQ_itemMatches(it,term);});
-      return {st:st,items:stItems};
-    }).filter(function(x){return x.items.length>0;});
-    if(!directItems.length&&!matchedSubtopics.length)return '';
-    totalVisible+=directItems.length+matchedSubtopics.reduce(function(a,x){return a+x.items.length;},0);
-    // Topics are open when searching, otherwise respect stored state (default open)
-    var isOpen=term?true:(topic._userOpen!==false);
-    var bodyId='faq-topic-body-'+topic.id;
-    var html='<div class="faq-topic" id="ftopic-'+topic.id+'">'
-      +'<div class="faq-topic-title faq-topic-title-collapsible" data-action="FAQ_toggleUserTopic" data-tid="'+escA(topic.id)+'">' 
-      +'<span class="faq-topic-arrow'+(isOpen?' open':'')+'" id="faq-tarrow-'+topic.id+'">&#9660;</span>'
-      +esc(topic.title||'General')
-      +'</div>'
-      +'<div class="faq-topic-body'+(isOpen?' open':'')+'" id="'+bodyId+'">';
-    html+=directItems.map(function(it){return FAQ_renderItem(it,term);}).join('');
-    html+=matchedSubtopics.map(function(x){
-      return '<div class="faq-subtopic"><div class="faq-subtopic-title">'+esc(x.st.title||'')+'</div>'
-        +x.items.map(function(it){return FAQ_renderItem(it,term);}).join('')+'</div>';
+
+  container.innerHTML=FAQ_DATA.map(function(section){
+    var sectionVisible=0;
+    var topicsHtml=(section.topics||[]).map(function(topic){
+      var directItems=(topic.items||[]).filter(function(it){return FAQ_itemMatches(it,term);});
+      var matchedSubtopics=(topic.subtopics||[]).map(function(st){
+        var stItems=(st.items||[]).filter(function(it){return FAQ_itemMatches(it,term);});
+        return {st:st,items:stItems};
+      }).filter(function(x){return x.items.length>0;});
+      if(!directItems.length&&!matchedSubtopics.length)return '';
+      sectionVisible+=directItems.length+matchedSubtopics.reduce(function(a,x){return a+x.items.length;},0);
+
+      var isTopicOpen=term?true:(topic._userOpen!==false);
+      var topicBodyId='faq-topic-body-'+topic.id;
+      var html='<div class="faq-topic" id="ftopic-'+topic.id+'">'
+        +'<div class="faq-topic-title faq-topic-title-collapsible" data-action="FAQ_toggleUserTopic" data-tid="'+escA(topic.id)+'">'
+        +'<span class="faq-topic-arrow'+(isTopicOpen?' open':'')+'" id="faq-tarrow-'+topic.id+'">&#9660;</span>'
+        +esc(topic.title||'General')+'</div>'
+        +'<div class="faq-topic-body'+(isTopicOpen?' open':'')+'" id="'+topicBodyId+'">';
+      html+=directItems.map(function(it){return FAQ_renderItem(it,term);}).join('');
+      html+=matchedSubtopics.map(function(x){
+        return '<div class="faq-subtopic"><div class="faq-subtopic-title">'+esc(x.st.title||'')+'</div>'
+          +x.items.map(function(it){return FAQ_renderItem(it,term);}).join('')+'</div>';
+      }).join('');
+      html+='</div></div>';
+      return html;
     }).join('');
-    html+='</div></div>';
-    return html;
+
+    if(!sectionVisible&&term)return '';
+    totalVisible+=sectionVisible;
+
+    var isSectionOpen=term?true:(section._userOpen!==false);
+    var secBodyId='faq-sec-body-'+section.id;
+    return '<div class="faq-section" id="fsec-'+section.id+'">'
+      +'<div class="faq-section-title" data-action="FAQ_toggleUserSection" data-sid="'+escA(section.id)+'">'
+      +'<span class="faq-section-arrow'+(isSectionOpen?' open':'')+'" id="faq-sarrow-'+section.id+'">&#9660;</span>'
+      +esc(section.title||'')+'</div>'
+      +'<div class="faq-section-body'+(isSectionOpen?' open':'')+'" id="'+secBodyId+'">'
+      +topicsHtml
+      +'</div></div>';
   }).join('');
+
   if(emptyEl)emptyEl.style.display=(totalVisible===0&&term)?'block':'none';
   if(term){
     container.querySelectorAll('.faq-item-hdr').forEach(function(h){h.classList.add('open');});
@@ -2804,21 +2891,13 @@ function FAQ_render(){
   }
 }
 
-function FAQ_toggleUserTopic(tid){
-  var topic=FAQ_DATA.find(function(t){return t.id===tid;});
-  if(!topic)return;
-  topic._userOpen=(topic._userOpen===false)?true:false;
-  var body=document.getElementById('faq-topic-body-'+tid);
-  var arrow=document.getElementById('faq-tarrow-'+tid);
-  if(body)body.classList.toggle('open',topic._userOpen);
-  if(arrow)arrow.classList.toggle('open',topic._userOpen);
-}
 function FAQ_itemMatches(item,term){
   if(!term)return true;
   var q=(item.question||'').toLowerCase();
   var a=item.type==='freetext'?(item.answer||'').toLowerCase():(item.options||[]).map(function(o){return(o.label+' '+o.answer).toLowerCase();}).join(' ');
   return q.indexOf(term)>=0||a.indexOf(term)>=0;
 }
+
 function FAQ_renderItem(item,term){
   var qHtml=term?FAQ_highlight(esc(item.question||''),term):esc(item.question||'');
   var bodyHtml='';
@@ -2831,12 +2910,15 @@ function FAQ_renderItem(item,term){
       return '<div style="margin-bottom:10px"><div style="font-weight:600;font-size:13px;color:var(--darkred);margin-bottom:4px">'+esc(o.label)+'</div><div style="font-size:13.5px">'+oAns+'</div></div>';
     }).join('')+'</div>';
   }
-  if(item.media&&item.media.length>0){bodyHtml+='<div class="faq-media-list">'+item.media.map(FAQ_renderMedia).join('')+'</div>';}
+  if(item.media&&item.media.length){bodyHtml+='<div class="faq-media-list">'+item.media.map(FAQ_renderMedia).join('')+'</div>';}
+  var isOpen=item._open===true;
   return '<div class="faq-item" id="fitem-'+item.id+'">'
-    +'<div class="faq-item-hdr" data-action="FAQ_toggle" data-fid="'+escA(item.id)+'">'
-    +'<span class="faq-item-q">'+qHtml+'</span><span class="faq-item-arrow">&#9660;</span></div>'
-    +'<div class="faq-item-body" id="fbody-'+item.id+'">'+bodyHtml+'</div></div>';
+    +'<div class="faq-item-hdr'+(isOpen?' open':'')+'" data-action="FAQ_toggle" data-fid="'+escA(item.id)+'">'
+    +'<span class="faq-item-q">'+qHtml+'</span>'
+    +'<span class="faq-item-arrow">&#9660;</span></div>'
+    +'<div class="faq-item-body'+(isOpen?' open':'')+'" id="fbody-'+item.id+'">'+bodyHtml+'</div></div>';
 }
+
 function FAQ_renderMedia(m){
   var icons={image:'&#128247;',video:'&#127916;',pdf:'&#128196;',word:'&#128221;',ppt:'&#128202;',link:'&#128279;'};
   var icon=icons[m.type]||'&#128206;';
@@ -2847,14 +2929,18 @@ function FAQ_renderMedia(m){
       +'<img class="faq-media-img" src="'+escA(m.url)+'" alt="'+escA(m.caption||'')+'"></div>';
   }
   if(m.type==='video'&&m.url){
-    var embedUrl=FAQ_getEmbedUrl(m.url);
-    if(embedUrl){return '<div class="faq-media-item" style="flex-direction:column;align-items:flex-start">'
+    var eUrl=FAQ_getEmbedUrl(m.url);
+    if(eUrl)return '<div class="faq-media-item" style="flex-direction:column;align-items:flex-start">'
       +'<div style="display:flex;align-items:center;gap:8px"><span class="faq-media-icon">'+icon+'</span><span class="faq-media-name">'+esc(label)+'</span></div>'
-      +'<iframe class="faq-media-embed" src="'+escA(embedUrl)+'" allowfullscreen></iframe></div>';}
+      +'<iframe class="faq-media-embed" src="'+escA(eUrl)+'" allowfullscreen></iframe></div>';
   }
-  return '<div class="faq-media-item"><span class="faq-media-icon">'+icon+'</span><span class="faq-media-name">'+esc(label)+'</span>'
-    +(m.url?'<a class="faq-media-link" href="'+escA(m.url)+'" target="_blank" rel="noopener">Open</a>':'')+'</div>';
+  // For links — make the label clickable if URL present
+  var linkHtml=m.url
+    ?'<a class="faq-media-link" href="'+escA(m.url)+'" target="_blank" rel="noopener">'+esc(label)+'</a>'
+    :'<span class="faq-media-name">'+esc(label)+'</span>';
+  return '<div class="faq-media-item"><span class="faq-media-icon">'+icon+'</span>'+linkHtml+'</div>';
 }
+
 function FAQ_getEmbedUrl(url){
   var yt=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);if(yt)return 'https://www.youtube.com/embed/'+yt[1];
   var vm=url.match(/vimeo\.com\/(\d+)/);if(vm)return 'https://player.vimeo.com/video/'+vm[1];
@@ -2865,81 +2951,131 @@ function FAQ_highlight(text,term){
   return text.replace(new RegExp('('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark class="faq-highlight">$1</mark>');
 }
 function FAQ_highlightHtml(html,term){
-  if(!term)return html;
-  var div=document.createElement('div');div.innerHTML=html;FAQ_walkText(div,term);return div.innerHTML;
+  if(!term)return html;var div=document.createElement('div');div.innerHTML=html;FAQ_walkText(div,term);return div.innerHTML;
 }
 function FAQ_walkText(node,term){
   if(node.nodeType===3){
     var re=new RegExp('('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
     if(re.test(node.textContent)){var span=document.createElement('span');span.innerHTML=node.textContent.replace(re,'<mark class="faq-highlight">$1</mark>');node.parentNode.replaceChild(span,node);}
-  } else {Array.from(node.childNodes).forEach(function(c){FAQ_walkText(c,term);});}
+  }else{Array.from(node.childNodes).forEach(function(c){FAQ_walkText(c,term);});}
+}
+
+/* Toggle user-view collapsibles */
+function FAQ_toggleUserSection(sid){
+  var sec=FAQ_DATA.find(function(s){return s.id===sid;});if(!sec)return;
+  sec._userOpen=(sec._userOpen===false)?true:false;
+  var body=document.getElementById('faq-sec-body-'+sid);
+  var arrow=document.getElementById('faq-sarrow-'+sid);
+  if(body)body.classList.toggle('open',sec._userOpen);
+  if(arrow)arrow.classList.toggle('open',sec._userOpen);
+}
+function FAQ_toggleUserTopic(tid){
+  var topic=FAQ_findTopic(tid);if(!topic)return;
+  topic._userOpen=(topic._userOpen===false)?true:false;
+  var body=document.getElementById('faq-topic-body-'+tid);
+  var arrow=document.getElementById('faq-tarrow-'+tid);
+  if(body)body.classList.toggle('open',topic._userOpen);
+  if(arrow)arrow.classList.toggle('open',topic._userOpen);
 }
 function FAQ_toggleItem(id){
+  var item=FAQ_findItem(id);
   var hdr=document.querySelector('#fitem-'+id+' .faq-item-hdr');
   var body=document.getElementById('fbody-'+id);
   if(!hdr||!body)return;
-  var open=body.classList.toggle('open');hdr.classList.toggle('open',open);
+  var open=body.classList.toggle('open');
+  hdr.classList.toggle('open',open);
+  if(item)item._open=open;
 }
 
-/* ── EDITOR ── */
+/* ════════════════════════════════════════
+   EDITOR
+════════════════════════════════════════ */
 function FAQ_renderEditor(){
   var c=document.getElementById('faq-editor-topics');if(!c)return;
-  c.innerHTML=FAQ_DATA.map(function(topic,ti){return FAQ_buildTopicBlock(topic,ti);}).join('');
+  c.innerHTML=FAQ_DATA.map(function(sec,si){return FAQ_buildSectionBlock(sec,si);}).join('');
   FAQ_initAllRTEs();
   FAQ_initDropZones();
 }
 function FAQ_initAllRTEs(){
-  FAQ_DATA.forEach(function(topic){
-    (topic.items||[]).forEach(function(item){FAQ_initItemRTEs(topic.id,null,item);});
-    (topic.subtopics||[]).forEach(function(st){(st.items||[]).forEach(function(item){FAQ_initItemRTEs(topic.id,st.id,item);});});
+  FAQ_DATA.forEach(function(sec){
+    (sec.topics||[]).forEach(function(topic){
+      (topic.items||[]).forEach(function(item){FAQ_initItemRTEs(item);});
+      (topic.subtopics||[]).forEach(function(st){(st.items||[]).forEach(function(item){FAQ_initItemRTEs(item);});});
+    });
   });
 }
-function FAQ_initItemRTEs(tid,stid,item){
-  var rteId=stid?'faq-rte-'+stid+'-'+item.id:'faq-rte-'+tid+'-'+item.id;
-  initRTE(rteId,function(h){item.answer=h;FAQ_save();});
+function FAQ_initItemRTEs(item){
+  initRTE('faq-rte-'+item.id,function(h){item.answer=h;FAQ_save();});
   (item.options||[]).forEach(function(opt,oi){initRTE('faq-optrte-'+item.id+'-'+oi,function(h){opt.answer=h;FAQ_save();});});
 }
 
-function FAQ_buildTopicBlock(topic,ti){
-  var isOpen=topic._open!==false; // default open
-  var directHtml=(topic.items||[]).map(function(item){return FAQ_buildQABlock(topic.id,null,item);}).join('');
-  var subtopicHtml=(topic.subtopics||[]).map(function(st,si){return FAQ_buildSubtopicBlock(topic,st,si);}).join('');
-  return '<div class="faq-topic-block" id="fedtopic-'+topic.id+'">'
-    +'<div class="faq-topic-block-hdr" data-action="FAQ_toggleTopic" data-tid="'+topic.id+'">'
-    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="font-size:11px;color:var(--ink3);flex-shrink:0">&#9660;</span>'
-    +'<span style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Topic</span>'
-    +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-tid="'+topic.id+'" onclick="event.stopPropagation()">'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+' onclick="event.stopPropagation()">&#8593;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-tid="'+topic.id+'" data-dir="1" '+(ti===FAQ_DATA.length-1?'disabled':'')+' onclick="event.stopPropagation()">&#8595;</button>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-tid="'+topic.id+'" onclick="event.stopPropagation()">Delete topic</button>'
+/* ── Section block ── */
+function FAQ_buildSectionBlock(sec,si){
+  var isOpen=sec._open!==false;
+  var topicsHtml=(sec.topics||[]).map(function(topic,ti){return FAQ_buildTopicBlock(sec,topic,ti);}).join('');
+  return '<div class="faq-topic-block" id="fedSec-'+sec.id+'">'
+    +'<div class="faq-topic-block-hdr faq-section-hdr" data-action="FAQ_toggleSection" data-sid="'+sec.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'">&#9660;</span>'
+    +'<span style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap">Section</span>'
+    +'<input class="faq-topic-name-input" type="text" value="'+escA(sec.title||'')+'" placeholder="Section name..." data-action="FAQ_setSecTitle" data-sid="'+sec.id+'" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSection" data-sid="'+sec.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSection" data-sid="'+sec.id+'" data-dir="1" '+(si===FAQ_DATA.length-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSection" data-sid="'+sec.id+'">Delete section</button>'
     +'</div>'
-    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="feditems-'+topic.id+'">'
+    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedSecItems-'+sec.id+'">'
+    +topicsHtml
+    +'<button class="add-faq-btn" data-action="FAQ_addTopic" data-sid="'+sec.id+'">+ Add topic</button>'
+    +'</div></div>';
+}
+
+/* ── Topic block ── */
+function FAQ_buildTopicBlock(sec,topic,ti){
+  var isOpen=topic._open!==false;
+  var directHtml=(topic.items||[]).map(function(item){return FAQ_buildQABlock(sec.id,topic.id,null,item);}).join('');
+  var subtopicHtml=(topic.subtopics||[]).map(function(st,si){return FAQ_buildSubtopicBlock(sec,topic,st,si);}).join('');
+  var nTopics=(sec.topics||[]).length;
+  return '<div class="faq-topic-block" style="margin-left:16px;border-left-color:var(--border2)" id="fedTopic-'+topic.id+'">'
+    +'<div class="faq-topic-block-hdr" data-action="FAQ_toggleTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'">&#9660;</span>'
+    +'<span style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap">Topic</span>'
+    +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+'>&#8593;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="1" '+(ti===nTopics-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">Delete topic</button>'
+    +'</div>'
+    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedTopicItems-'+topic.id+'">'
     +directHtml
-    +'<button class="add-faq-btn" data-action="FAQ_addItem" data-tid="'+topic.id+'">+ Add question</button>'
+    +'<button class="add-faq-btn" data-action="FAQ_addItem" data-sid="'+sec.id+'" data-tid="'+topic.id+'">+ Add question</button>'
     +subtopicHtml
-    +'<button class="add-faq-btn" style="border-color:var(--amber);color:#7a5000;margin-top:6px" data-action="FAQ_addSubtopic" data-tid="'+topic.id+'">+ Add subtopic</button>'
+    +'<button class="add-faq-btn" style="border-color:var(--amber);color:#7a5000;margin-top:6px" data-action="FAQ_addSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">+ Add subtopic</button>'
     +'</div></div>';
 }
-function FAQ_buildSubtopicBlock(topic,st,si){
-  var isOpen=st._open!==false; // default open
-  var itemsHtml=(st.items||[]).map(function(item){return FAQ_buildQABlock(topic.id,st.id,item);}).join('');
-  return '<div class="faq-subtopic-block" id="fedsubtopic-'+st.id+'">'
-    +'<div class="faq-subtopic-block-hdr" data-action="FAQ_toggleSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'">'
-    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="font-size:11px;color:var(--amber);flex-shrink:0">&#9660;</span>'
+
+/* ── Subtopic block ── */
+function FAQ_buildSubtopicBlock(sec,topic,st,si){
+  var isOpen=st._open!==false;
+  var itemsHtml=(st.items||[]).map(function(item){return FAQ_buildQABlock(sec.id,topic.id,st.id,item);}).join('');
+  var nSt=(topic.subtopics||[]).length;
+  return '<div class="faq-subtopic-block" id="fedSubtopic-'+st.id+'">'
+    +'<div class="faq-subtopic-block-hdr" data-action="FAQ_toggleSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="color:var(--amber)">&#9660;</span>'
     +'<span style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Subtopic</span>'
-    +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+' onclick="event.stopPropagation()">&#8593;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+((si===(topic.subtopics||[]).length-1)?'disabled':'')+' onclick="event.stopPropagation()">&#8595;</button>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">Delete subtopic</button>'
+    +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+(si===nSt-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">Delete subtopic</button>'
     +'</div>'
-    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedsubitems-'+st.id+'">'
+    +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedSubItems-'+st.id+'">'
     +itemsHtml
-    +'<button class="add-faq-btn" data-action="FAQ_addSubItem" data-tid="'+topic.id+'" data-stid="'+st.id+'">+ Add question</button>'
+    +'<button class="add-faq-btn" data-action="FAQ_addSubItem" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">+ Add question</button>'
     +'</div></div>';
 }
-function FAQ_buildQABlock(tid,stid,item){
+
+/* ── Q&A block ── */
+function FAQ_buildQABlock(sid,tid,stid,item){
+  var isOpen=item._open!==false;
   var isDropdown=item.type==='dropdown';
-  var rteId=stid?'faq-rte-'+stid+'-'+item.id:'faq-rte-'+tid+'-'+item.id;
+  var rteId='faq-rte-'+item.id;
   var optsHtml='';
   if(isDropdown){
     optsHtml='<div class="faq-qa-opts-wrap">'
@@ -2972,104 +3108,181 @@ function FAQ_buildQABlock(tid,stid,item){
       +'<button class="btn btn-danger btn-sm" data-action="FAQ_delMedia" data-iid="'+item.id+'" data-mi="'+mi+'">&#10005;</button>'
       +'</div>'+thumbHtml+'</div>';
   }).join('');
+
+  var mediaOpen=item._mediaOpen===true;
   return '<div class="faq-qa-block" id="fedqa-'+item.id+'">'
-    +'<div class="faq-qa-block-top">'
-    +'<select class="faq-qa-type-sel" data-action="FAQ_setItemType" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'">'
-    +'<option value="freetext"'+(item.type==='freetext'?' selected':'')+'>Free text answer</option>'
-    +'<option value="dropdown"'+(item.type==='dropdown'?' selected':'')+'>Dropdown options</option>'
+    // Question header (collapsible)
+    +'<div class="faq-qa-hdr" data-action="FAQ_toggleQA" data-iid="'+item.id+'">'
+    +'<span class="faq-collapse-arrow'+(isOpen?' open':'')+'" style="font-size:10px;color:var(--ink3)">&#9660;</span>'
+    +'<span class="faq-qa-hdr-q">'+esc(item.question||'New question')+'</span>'
+    +'<select class="faq-qa-type-sel" data-action="FAQ_setItemType" data-sid="'+sid+'" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'" onclick="event.stopPropagation()">'
+    +'<option value="freetext"'+(item.type==='freetext'?' selected':'')+'>Free text</option>'
+    +'<option value="dropdown"'+(item.type==='dropdown'?' selected':'')+'>Dropdown</option>'
     +'</select>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delItem" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'">Delete</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delItem" data-sid="'+sid+'" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'" onclick="event.stopPropagation()">Delete</button>'
     +'</div>'
+    // Body (collapsible)
+    +'<div class="faq-qa-body'+(isOpen?' open':'')+'" id="fedqabody-'+item.id+'">'
     +'<input class="faq-qa-q-input" type="text" value="'+escA(item.question||'')+'" placeholder="Question..." data-action="FAQ_setQuestion" data-iid="'+item.id+'">'
     +(isDropdown?optsHtml:'<div>'+buildRTE(rteId,item.answer||'')+'</div>')
+    // Media section (collapsible)
     +'<div class="faq-media-editor">'
-    +'<div class="faq-media-editor-hdr">&#128206; Media &amp; attachments</div>'
+    +'<div class="faq-media-editor-hdr" data-action="FAQ_toggleMedia" data-iid="'+item.id+'" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px">'
+    +'<span class="faq-collapse-arrow'+(mediaOpen?' open':'')+'" style="font-size:9px;color:var(--ink3)">&#9660;</span>'
+    +'&#128206; Media &amp; attachments <span style="font-size:11px;color:var(--ink3);font-weight:400">'+(item.media&&item.media.length?'('+item.media.length+')':'')+'</span>'
+    +'</div>'
+    +'<div class="faq-media-body'+(mediaOpen?' open':'')+'" id="fedmediabody-'+item.id+'">'
     +mediaRowsHtml
     +'<div class="faq-drop-zone" data-iid="'+item.id+'">'
     +'<span class="faq-drop-icon">&#128229;</span>'
-    +'<span class="faq-drop-label">Drag &amp; drop files here</span>'
+    +'<span class="faq-drop-label">Drag &amp; drop or paste screenshots here</span>'
     +'<span class="faq-drop-sub">Images, video, PDF, Word, PowerPoint</span>'
     +'<label class="btn btn-secondary btn-sm" style="cursor:pointer;margin-top:6px">Browse files'
-    +'<input type="file" data-iid="'+item.id+'" data-action="FAQ_fileInput" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx" style="display:none">'
+    +'<input type="file" data-iid="'+item.id+'" data-action="FAQ_fileInput" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none">'
     +'</label>'
     +'<span style="color:var(--ink3);font-size:12px;margin:4px 0">or</span>'
     +'<button class="add-faq-btn" style="display:inline-flex;width:auto;padding:5px 14px;margin:0" data-action="FAQ_addMedia" data-iid="'+item.id+'">+ Add link / URL</button>'
-    +'</div></div></div>';
+    +'</div>'
+    +'</div></div>'
+    +'</div></div>';
 }
 
 /* ── Find helpers ── */
-function FAQ_findTopic(tid){return FAQ_DATA.find(function(t){return t.id===tid;});}
+function FAQ_findSection(sid){return FAQ_DATA.find(function(s){return s.id===sid;});}
+function FAQ_findTopic(tid){
+  for(var i=0;i<FAQ_DATA.length;i++){var t=(FAQ_DATA[i].topics||[]).find(function(t){return t.id===tid;});if(t)return t;}
+  return null;
+}
 function FAQ_findSubtopic(tid,stid){var t=FAQ_findTopic(tid);return t?(t.subtopics||[]).find(function(s){return s.id===stid;}):null;}
 function FAQ_findItem(iid){
-  for(var ti=0;ti<FAQ_DATA.length;ti++){
-    var t=FAQ_DATA[ti];
-    var it=(t.items||[]).find(function(i){return i.id===iid;});if(it)return it;
-    for(var si=0;si<(t.subtopics||[]).length;si++){
-      var sit=(t.subtopics[si].items||[]).find(function(i){return i.id===iid;});if(sit)return sit;
+  for(var si=0;si<FAQ_DATA.length;si++){
+    var sec=FAQ_DATA[si];
+    for(var ti=0;ti<(sec.topics||[]).length;ti++){
+      var top=sec.topics[ti];
+      var it=(top.items||[]).find(function(i){return i.id===iid;});if(it)return it;
+      for(var sti=0;sti<(top.subtopics||[]).length;sti++){
+        var sit=(top.subtopics[sti].items||[]).find(function(i){return i.id===iid;});if(sit)return sit;
+      }
     }
   }return null;
 }
 
-/* ── Mutations ── */
+/* ── Toggle editor collapsibles ── */
+function FAQ_toggleSection(sid){
+  var s=FAQ_findSection(sid);if(!s)return;s._open=(s._open===false)?true:false;
+  var b=document.getElementById('fedSecItems-'+sid);
+  var a=document.querySelector('#fedSec-'+sid+' .faq-section-hdr .faq-collapse-arrow');
+  if(b)b.classList.toggle('open',s._open);if(a)a.classList.toggle('open',s._open);
+}
 function FAQ_toggleTopic(tid){
+  var t=FAQ_findTopic(tid);if(!t)return;t._open=(t._open===false)?true:false;
+  var b=document.getElementById('fedTopicItems-'+tid);
+  var a=document.querySelector('#fedTopic-'+tid+' > .faq-topic-block-hdr .faq-collapse-arrow');
+  if(b)b.classList.toggle('open',t._open);if(a)a.classList.toggle('open',t._open);
+}
+function FAQ_toggleSubtopic(stid){
+  var t=null;
+  for(var i=0;i<FAQ_DATA.length;i++){for(var j=0;j<(FAQ_DATA[i].topics||[]).length;j++){var st=(FAQ_DATA[i].topics[j].subtopics||[]).find(function(s){return s.id===stid;});if(st){t=st;break;}}if(t)break;}
+  if(!t)return;t._open=(t._open===false)?true:false;
+  var b=document.getElementById('fedSubItems-'+stid);
+  var a=document.querySelector('#fedSubtopic-'+stid+' > .faq-subtopic-block-hdr .faq-collapse-arrow');
+  if(b)b.classList.toggle('open',t._open);if(a)a.classList.toggle('open',t._open);
+}
+function FAQ_toggleQA(iid){
+  var item=FAQ_findItem(iid);if(!item)return;
+  item._open=(item._open===false)?true:false;
+  var b=document.getElementById('fedqabody-'+iid);
+  var a=document.querySelector('#fedqa-'+iid+' > .faq-qa-hdr .faq-collapse-arrow');
+  if(b)b.classList.toggle('open',item._open);if(a)a.classList.toggle('open',item._open);
+  // Update header question text
+  var hdrQ=document.querySelector('#fedqa-'+iid+' .faq-qa-hdr-q');
+  if(hdrQ)hdrQ.textContent=item.question||'New question';
+}
+function FAQ_toggleMedia(iid){
+  var item=FAQ_findItem(iid);if(!item)return;
+  item._mediaOpen=!item._mediaOpen;
+  var b=document.getElementById('fedmediabody-'+iid);
+  var a=document.querySelector('#fedqa-'+iid+' .faq-media-editor-hdr .faq-collapse-arrow');
+  if(b)b.classList.toggle('open',item._mediaOpen);if(a)a.classList.toggle('open',item._mediaOpen);
+  // Update count badge
+  var hdr=document.querySelector('#fedqa-'+iid+' .faq-media-editor-hdr span[style*="font-size:11px"]');
+  if(hdr&&item.media)hdr.textContent=item.media.length?'('+item.media.length+')':'';
+}
+
+/* ── Mutations: Sections ── */
+function FAQ_newItem(){return{id:FAQ_qid(),type:'freetext',question:'',answer:'',_open:true,_mediaOpen:false,options:[],media:[]};}
+function FAQ_addSection(){FAQ_DATA.push({id:FAQ_sid(),title:'',_open:true,topics:[]});FAQ_save();FAQ_renderEditor();}
+function FAQ_delSection(sid){if(!confirm('Delete this section and all its content?'))return;FAQ_DATA=FAQ_DATA.filter(function(s){return s.id!==sid;});FAQ_save();FAQ_renderEditor();}
+function FAQ_moveSection(sid,dir){var i=FAQ_DATA.findIndex(function(s){return s.id===sid;}),n=i+dir;if(n<0||n>=FAQ_DATA.length)return;var tmp=FAQ_DATA[i];FAQ_DATA[i]=FAQ_DATA[n];FAQ_DATA[n]=tmp;FAQ_save();FAQ_renderEditor();}
+function FAQ_setSecTitle(sid,val){var s=FAQ_findSection(sid);if(s){s.title=val;FAQ_save();}}
+
+/* ── Mutations: Topics ── */
+function FAQ_addTopic(sid){var s=FAQ_findSection(sid);if(!s)return;s.topics=s.topics||[];s.topics.push({id:FAQ_tid(),title:'',_open:true,items:[],subtopics:[]});FAQ_save();FAQ_renderEditor();}
+function FAQ_delTopic(sid,tid){var s=FAQ_findSection(sid);if(!s)return;if(!confirm('Delete this topic?'))return;s.topics=(s.topics||[]).filter(function(t){return t.id!==tid;});FAQ_save();FAQ_renderEditor();}
+function FAQ_moveTopic(sid,tid,dir){
+  var s=FAQ_findSection(sid);if(!s||!s.topics)return;
+  var i=s.topics.findIndex(function(t){return t.id===tid;}),n=i+dir;
+  if(n<0||n>=s.topics.length)return;var tmp=s.topics[i];s.topics[i]=s.topics[n];s.topics[n]=tmp;FAQ_save();FAQ_renderEditor();
+}
+function FAQ_setTopicTitle(sid,tid,val){var t=FAQ_findTopic(tid);if(t){t.title=val;FAQ_save();}}
+
+/* ── Mutations: Subtopics ── */
+function FAQ_addSubtopic(sid,tid){var t=FAQ_findTopic(tid);if(!t)return;t.subtopics=t.subtopics||[];t.subtopics.push({id:FAQ_stid(),title:'',_open:true,items:[]});FAQ_save();FAQ_renderEditor();}
+function FAQ_delSubtopic(sid,tid,stid){var t=FAQ_findTopic(tid);if(!t)return;if(!confirm('Delete this subtopic?'))return;t.subtopics=(t.subtopics||[]).filter(function(s){return s.id!==stid;});FAQ_save();FAQ_renderEditor();}
+function FAQ_moveSubtopic(sid,tid,stid,dir){
+  var t=FAQ_findTopic(tid);if(!t||!t.subtopics)return;
+  var i=t.subtopics.findIndex(function(s){return s.id===stid;}),n=i+dir;
+  if(n<0||n>=t.subtopics.length)return;var tmp=t.subtopics[i];t.subtopics[i]=t.subtopics[n];t.subtopics[n]=tmp;FAQ_save();FAQ_renderEditor();
+}
+function FAQ_setSubtopicTitle(sid,tid,stid,val){var st=FAQ_findSubtopic(tid,stid);if(st){st.title=val;FAQ_save();}}
+
+/* ── Mutations: Items ── */
+function FAQ_addItem(sid,tid){var t=FAQ_findTopic(tid);if(!t)return;t.items=t.items||[];t.items.push(FAQ_newItem());FAQ_save();FAQ_renderEditor();}
+function FAQ_addSubItem(sid,tid,stid){var st=FAQ_findSubtopic(tid,stid);if(!st)return;st.items=st.items||[];st.items.push(FAQ_newItem());FAQ_save();FAQ_renderEditor();}
+function FAQ_delItem(sid,tid,stid,iid){
   var t=FAQ_findTopic(tid);if(!t)return;
-  t._open=(t._open===false)?true:false;
-  var body=document.getElementById('feditems-'+tid);
-  var arrow=document.querySelector('#fedtopic-'+tid+' .faq-collapse-arrow');
-  if(body)body.classList.toggle('open',t._open);
-  if(arrow)arrow.classList.toggle('open',t._open);
+  if(stid){var st=FAQ_findSubtopic(tid,stid);if(st)st.items=(st.items||[]).filter(function(i){return i.id!==iid;});}
+  else{t.items=(t.items||[]).filter(function(i){return i.id!==iid;});}
+  FAQ_save();FAQ_renderEditor();
 }
-function FAQ_toggleSubtopic(tid,stid){
-  var st=FAQ_findSubtopic(tid,stid);if(!st)return;
-  st._open=(st._open===false)?true:false;
-  var body=document.getElementById('fedsubitems-'+stid);
-  var arrow=document.querySelector('#fedsubtopic-'+stid+' .faq-collapse-arrow');
-  if(body)body.classList.toggle('open',st._open);
-  if(arrow)arrow.classList.toggle('open',st._open);
-}
-function FAQ_newItem(){return{id:FAQ_qid(),type:'freetext',question:'',answer:'',options:[],media:[]};}
-function FAQ_addTopic(){FAQ_DATA.push({id:FAQ_tid(),title:'',items:[],subtopics:[]});FAQ_save();FAQ_renderEditor();}
-function FAQ_delTopic(tid){if(!confirm('Delete this topic and all its content?'))return;FAQ_DATA=FAQ_DATA.filter(function(t){return t.id!==tid;});FAQ_save();FAQ_renderEditor();}
-function FAQ_moveTopic(tid,dir){var i=FAQ_DATA.findIndex(function(t){return t.id===tid;}),n=i+dir;if(n<0||n>=FAQ_DATA.length)return;var tmp=FAQ_DATA[i];FAQ_DATA[i]=FAQ_DATA[n];FAQ_DATA[n]=tmp;FAQ_save();FAQ_renderEditor();}
-function FAQ_setTopicTitle(tid,val){var t=FAQ_findTopic(tid);if(t){t.title=val;FAQ_save();}}
-function FAQ_addSubtopic(tid){var t=FAQ_findTopic(tid);if(!t)return;if(!t.subtopics)t.subtopics=[];t.subtopics.push({id:FAQ_stid(),title:'',items:[]});FAQ_save();FAQ_renderEditor();}
-function FAQ_delSubtopic(tid,stid){var t=FAQ_findTopic(tid);if(!t)return;if(!confirm('Delete this subtopic?'))return;t.subtopics=(t.subtopics||[]).filter(function(s){return s.id!==stid;});FAQ_save();FAQ_renderEditor();}
-function FAQ_moveSubtopic(tid,stid,dir){var t=FAQ_findTopic(tid);if(!t||!t.subtopics)return;var i=t.subtopics.findIndex(function(s){return s.id===stid;}),n=i+dir;if(n<0||n>=t.subtopics.length)return;var tmp=t.subtopics[i];t.subtopics[i]=t.subtopics[n];t.subtopics[n]=tmp;FAQ_save();FAQ_renderEditor();}
-function FAQ_setSubtopicTitle(tid,stid,val){var st=FAQ_findSubtopic(tid,stid);if(st){st.title=val;FAQ_save();}}
-function FAQ_addItem(tid){var t=FAQ_findTopic(tid);if(!t)return;t.items=t.items||[];t.items.push(FAQ_newItem());FAQ_save();FAQ_renderEditor();}
-function FAQ_addSubItem(tid,stid){var st=FAQ_findSubtopic(tid,stid);if(!st)return;st.items=st.items||[];st.items.push(FAQ_newItem());FAQ_save();FAQ_renderEditor();}
-function FAQ_delItem(tid,stid,iid){var t=FAQ_findTopic(tid);if(!t)return;if(stid){var st=FAQ_findSubtopic(tid,stid);if(st)st.items=(st.items||[]).filter(function(i){return i.id!==iid;});}else{t.items=(t.items||[]).filter(function(i){return i.id!==iid;});}FAQ_save();FAQ_renderEditor();}
-function FAQ_setQuestion(iid,val){var it=FAQ_findItem(iid);if(it){it.question=val;FAQ_save();}}
-function FAQ_setItemType(tid,stid,iid,val){var it=FAQ_findItem(iid);if(!it)return;it.type=val;if(val==='dropdown'&&(!it.options||!it.options.length))it.options=[{label:'',answer:''}];FAQ_save();FAQ_renderEditor();}
+function FAQ_setQuestion(iid,val){var it=FAQ_findItem(iid);if(it){it.question=val;FAQ_save();
+  var hdrQ=document.querySelector('#fedqa-'+iid+' .faq-qa-hdr-q');if(hdrQ)hdrQ.textContent=val||'New question';
+}}
+function FAQ_setItemType(sid,tid,stid,iid,val){var it=FAQ_findItem(iid);if(!it)return;it.type=val;if(val==='dropdown'&&(!it.options||!it.options.length))it.options=[{label:'',answer:''}];FAQ_save();FAQ_renderEditor();}
 function FAQ_addOpt(iid){var it=FAQ_findItem(iid);if(!it)return;it.options=it.options||[];it.options.push({label:'',answer:''});FAQ_save();FAQ_renderEditor();}
 function FAQ_delOpt(iid,oi){var it=FAQ_findItem(iid);if(!it)return;it.options.splice(oi,1);FAQ_save();FAQ_renderEditor();}
 function FAQ_setOptLabel(iid,oi,val){var it=FAQ_findItem(iid);if(!it||!it.options[oi])return;it.options[oi].label=val;FAQ_save();}
-function FAQ_addMedia(iid){var it=FAQ_findItem(iid);if(!it)return;it.media=it.media||[];it.media.push({type:'link',url:'',caption:''});FAQ_save();FAQ_renderEditor();}
+
+/* ── Media mutations ── */
+function FAQ_addMedia(iid){var it=FAQ_findItem(iid);if(!it)return;it.media=it.media||[];it.media.push({type:'link',url:'',caption:''});it._mediaOpen=true;FAQ_save();FAQ_renderEditor();}
 function FAQ_delMedia(iid,mi){var it=FAQ_findItem(iid);if(!it)return;it.media.splice(mi,1);FAQ_save();FAQ_renderEditor();}
 function FAQ_setMediaType(iid,mi,val){var it=FAQ_findItem(iid);if(!it||!it.media[mi])return;it.media[mi].type=val;FAQ_save();}
 function FAQ_setMediaUrl(iid,mi,val){var it=FAQ_findItem(iid);if(!it||!it.media[mi])return;it.media[mi].url=val;FAQ_save();}
 function FAQ_setMediaCaption(iid,mi,val){var it=FAQ_findItem(iid);if(!it||!it.media[mi])return;it.media[mi].caption=val;FAQ_save();}
 
-/* ── File upload ── */
+/* ── File upload / paste screenshots ── */
 function FAQ_getMediaType(file){
   var ext=(file.name||'').split('.').pop().toLowerCase();
   var mime=file.type||'';
   if(mime.startsWith('image/')||['jpg','jpeg','png','gif','webp','svg'].indexOf(ext)>=0)return 'image';
   if(mime.startsWith('video/')||['mp4','mov','avi','webm'].indexOf(ext)>=0)return 'video';
   if(ext==='pdf'||mime==='application/pdf')return 'pdf';
-  if(['doc','docx'].indexOf(ext)>=0)return 'word';
-  if(['ppt','pptx'].indexOf(ext)>=0)return 'ppt';
+  if(['doc','docx'].indexOf(ext)>=0||mime.indexOf('word')>=0)return 'word';
+  if(['ppt','pptx'].indexOf(ext)>=0||mime.indexOf('presentation')>=0||mime.indexOf('powerpoint')>=0)return 'ppt';
   return 'link';
 }
 function FAQ_uploadFile(file){
   var safeName=Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
   return fetch(SB_URL+'/storage/v1/object/faq-media/'+safeName,{
-    method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},body:file
-  }).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error('Upload failed '+r.status);});return SB_URL+'/storage/v1/object/public/faq-media/'+safeName;});
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
+    body:file
+  }).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error('Upload failed '+r.status+': '+t);});
+    return SB_URL+'/storage/v1/object/public/faq-media/'+safeName;});
 }
 function FAQ_handleFiles(iid,files){
   var item=FAQ_findItem(iid);if(!item||!files||!files.length)return;
-  item.media=item.media||[];
+  item.media=item.media||[];item._mediaOpen=true;
   Array.from(files).forEach(function(file){
     var mt=FAQ_getMediaType(file);
     item.media.push({type:mt,url:'',caption:file.name,_uploading:true});
@@ -3078,7 +3291,7 @@ function FAQ_handleFiles(iid,files){
       var it=FAQ_findItem(iid);if(!it)return;
       var idx=it.media.findIndex(function(m){return m._uploading&&m.caption===file.name;});
       if(idx>=0){it.media[idx].url=url;delete it.media[idx]._uploading;}
-      FAQ_save();FAQ_renderEditor();showToast(file.name+' uploaded ✓');
+      FAQ_save();FAQ_renderEditor();showToast(file.name+' uploaded \u2713');
     }).catch(function(err){
       var it=FAQ_findItem(iid);if(!it)return;
       var idx=it.media.findIndex(function(m){return m._uploading&&m.caption===file.name;});
@@ -3094,7 +3307,37 @@ function FAQ_initDropZones(){
     zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('drag-over');});
     zone.addEventListener('dragleave',function(){zone.classList.remove('drag-over');});
     zone.addEventListener('drop',function(e){e.preventDefault();zone.classList.remove('drag-over');FAQ_handleFiles(iid,e.dataTransfer.files);});
+    // Paste support on the zone itself
+    zone.addEventListener('paste',function(e){
+      var items=e.clipboardData&&e.clipboardData.items;
+      if(!items)return;
+      var files=[];
+      for(var i=0;i<items.length;i++){if(items[i].kind==='file')files.push(items[i].getAsFile());}
+      if(files.length){e.preventDefault();FAQ_handleFiles(iid,files);}
+    });
   });
+  // Global paste listener — paste into any RTE inside a Q&A block goes to that block's media
+  if(!document._faqPasteInit){
+    document._faqPasteInit=true;
+    document.addEventListener('paste',function(e){
+      var items=e.clipboardData&&e.clipboardData.items;
+      if(!items)return;
+      var imageFiles=[];
+      for(var i=0;i<items.length;i++){if(items[i].kind==='file'&&items[i].type.startsWith('image/'))imageFiles.push(items[i].getAsFile());}
+      if(!imageFiles.length)return;
+      // Find nearest Q&A block ancestor
+      var target=e.target;
+      while(target&&target!==document.body){
+        if(target.id&&target.id.startsWith('fedqa-')){
+          var iid=target.id.replace('fedqa-','');
+          e.preventDefault();
+          FAQ_handleFiles(iid,imageFiles);
+          return;
+        }
+        target=target.parentElement;
+      }
+    });
+  }
 }
 
 /* ── Backup ── */
@@ -3105,48 +3348,70 @@ function FAQ_exportBackup(){
 function FAQ_importBackup(ev){
   var f=ev.target.files[0];if(!f)return;
   var r=new FileReader();
-  r.onload=function(e){try{var d=JSON.parse(e.target.result);if(!Array.isArray(d))throw new Error();FAQ_DATA=d;FAQ_save();FAQ_renderEditor();FAQ_render();showToast('FAQ imported');}catch(err){alert('Import failed.');}};
+  r.onload=function(e){
+    try{var d=JSON.parse(e.target.result);if(!Array.isArray(d))throw new Error();
+      // Auto-migrate old format
+      if(d.length&&d[0].topics===undefined&&(d[0].items!==undefined||d[0].subtopics!==undefined)){
+        d=[{id:FAQ_sid(),title:'General',_open:true,topics:d.map(function(t){
+          return{id:t.id,title:t.title,_open:t._open!==false,
+            subtopics:(t.subtopics||[]).map(function(st){return{id:st.id,title:st.title,_open:st._open!==false,items:st.items||[]};}) ,
+            items:t.items||[]};
+        })}];
+      }
+      FAQ_DATA=d;FAQ_save();FAQ_renderEditor();FAQ_render();showToast('FAQ imported');
+    }catch(err){alert('Import failed.');}
+  };
   r.readAsText(f);ev.target.value='';
 }
 
 /* ── Event delegation ── */
 document.addEventListener('click',function(e){
-  var el=e.target.closest('[data-action]');
-  if(!el)return;
-  var a=el.dataset.action;
-  if(!a||!a.startsWith('FAQ_'))return;
+  var el=e.target.closest('[data-action]');if(!el)return;
+  var a=el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
+  e.stopPropagation();
+  // Collapsibles
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
+  if(a==='FAQ_toggleUserSection'){FAQ_toggleUserSection(el.dataset.sid);return;}
   if(a==='FAQ_toggleUserTopic'){FAQ_toggleUserTopic(el.dataset.tid);return;}
-  if(a==='FAQ_addTopic'){FAQ_addTopic();return;}
+  if(a==='FAQ_toggleSection'){FAQ_toggleSection(el.dataset.sid);return;}
   if(a==='FAQ_toggleTopic'){FAQ_toggleTopic(el.dataset.tid);return;}
-  if(a==='FAQ_toggleSubtopic'){FAQ_toggleSubtopic(el.dataset.tid,el.dataset.stid);return;}
-  if(a==='FAQ_delTopic'){FAQ_delTopic(el.dataset.tid);return;}
-  if(a==='FAQ_moveTopic'){FAQ_moveTopic(el.dataset.tid,parseInt(el.dataset.dir));return;}
-  if(a==='FAQ_addSubtopic'){FAQ_addSubtopic(el.dataset.tid);return;}
-  if(a==='FAQ_delSubtopic'){FAQ_delSubtopic(el.dataset.tid,el.dataset.stid);return;}
-  if(a==='FAQ_moveSubtopic'){FAQ_moveSubtopic(el.dataset.tid,el.dataset.stid,parseInt(el.dataset.dir));return;}
-  if(a==='FAQ_addItem'){FAQ_addItem(el.dataset.tid);return;}
-  if(a==='FAQ_addSubItem'){FAQ_addSubItem(el.dataset.tid,el.dataset.stid);return;}
-  if(a==='FAQ_delItem'){FAQ_delItem(el.dataset.tid,el.dataset.stid||null,el.dataset.iid);return;}
+  if(a==='FAQ_toggleSubtopic'){FAQ_toggleSubtopic(el.dataset.stid);return;}
+  if(a==='FAQ_toggleQA'){FAQ_toggleQA(el.dataset.iid);return;}
+  if(a==='FAQ_toggleMedia'){FAQ_toggleMedia(el.dataset.iid);return;}
+  // Sections
+  if(a==='FAQ_addSection'){FAQ_addSection();return;}
+  if(a==='FAQ_delSection'){FAQ_delSection(el.dataset.sid);return;}
+  if(a==='FAQ_moveSection'){FAQ_moveSection(el.dataset.sid,parseInt(el.dataset.dir));return;}
+  // Topics
+  if(a==='FAQ_addTopic'){FAQ_addTopic(el.dataset.sid);return;}
+  if(a==='FAQ_delTopic'){FAQ_delTopic(el.dataset.sid,el.dataset.tid);return;}
+  if(a==='FAQ_moveTopic'){FAQ_moveTopic(el.dataset.sid,el.dataset.tid,parseInt(el.dataset.dir));return;}
+  // Subtopics
+  if(a==='FAQ_addSubtopic'){FAQ_addSubtopic(el.dataset.sid,el.dataset.tid);return;}
+  if(a==='FAQ_delSubtopic'){FAQ_delSubtopic(el.dataset.sid,el.dataset.tid,el.dataset.stid);return;}
+  if(a==='FAQ_moveSubtopic'){FAQ_moveSubtopic(el.dataset.sid,el.dataset.tid,el.dataset.stid,parseInt(el.dataset.dir));return;}
+  // Items
+  if(a==='FAQ_addItem'){FAQ_addItem(el.dataset.sid,el.dataset.tid);return;}
+  if(a==='FAQ_addSubItem'){FAQ_addSubItem(el.dataset.sid,el.dataset.tid,el.dataset.stid);return;}
+  if(a==='FAQ_delItem'){FAQ_delItem(el.dataset.sid,el.dataset.tid,el.dataset.stid||null,el.dataset.iid);return;}
   if(a==='FAQ_addOpt'){FAQ_addOpt(el.dataset.iid);return;}
   if(a==='FAQ_delOpt'){FAQ_delOpt(el.dataset.iid,parseInt(el.dataset.oi));return;}
   if(a==='FAQ_addMedia'){FAQ_addMedia(el.dataset.iid);return;}
   if(a==='FAQ_delMedia'){FAQ_delMedia(el.dataset.iid,parseInt(el.dataset.mi));return;}
 });
 document.addEventListener('input',function(e){
-  var el=e.target,a=el.dataset&&el.dataset.action;
-  if(!a||!a.startsWith('FAQ_'))return;
-  if(a==='FAQ_setTopicTitle'){FAQ_setTopicTitle(el.dataset.tid,el.value);return;}
-  if(a==='FAQ_setSubtopicTitle'){FAQ_setSubtopicTitle(el.dataset.tid,el.dataset.stid,el.value);return;}
+  var el=e.target,a=el.dataset&&el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
+  if(a==='FAQ_setSecTitle'){FAQ_setSecTitle(el.dataset.sid,el.value);return;}
+  if(a==='FAQ_setTopicTitle'){FAQ_setTopicTitle(el.dataset.sid,el.dataset.tid,el.value);return;}
+  if(a==='FAQ_setSubtopicTitle'){FAQ_setSubtopicTitle(el.dataset.sid,el.dataset.tid,el.dataset.stid,el.value);return;}
   if(a==='FAQ_setQuestion'){FAQ_setQuestion(el.dataset.iid,el.value);return;}
   if(a==='FAQ_setOptLabel'){FAQ_setOptLabel(el.dataset.iid,parseInt(el.dataset.oi),el.value);return;}
   if(a==='FAQ_setMediaUrl'){FAQ_setMediaUrl(el.dataset.iid,parseInt(el.dataset.mi),el.value);return;}
   if(a==='FAQ_setMediaCaption'){FAQ_setMediaCaption(el.dataset.iid,parseInt(el.dataset.mi),el.value);return;}
 });
 document.addEventListener('change',function(e){
-  var el=e.target,a=el.dataset&&el.dataset.action;
-  if(!a||!a.startsWith('FAQ_'))return;
-  if(a==='FAQ_setItemType'){FAQ_setItemType(el.dataset.tid,el.dataset.stid||null,el.dataset.iid,el.value);return;}
+  var el=e.target,a=el.dataset&&el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
+  if(a==='FAQ_setItemType'){FAQ_setItemType(el.dataset.sid,el.dataset.tid,el.dataset.stid||null,el.dataset.iid,el.value);return;}
   if(a==='FAQ_setMediaType'){FAQ_setMediaType(el.dataset.iid,parseInt(el.dataset.mi),el.value);return;}
   if(a==='FAQ_fileInput'&&el.files&&el.files.length){FAQ_handleFiles(el.dataset.iid,el.files);el.value='';return;}
 });
