@@ -1106,6 +1106,7 @@ function conditionsMet(s){
   var fn=useOr?'some':'every';
   return s.conditions[fn](function(c){
     var ref=DATA.find(function(r){return r.id===c.sectionId;});
+    /* unresolved ref: skip in AND (pass), exclude in OR (no match) */
     if(!ref) return !useOr;
     if(ref.type==='dynamic'){var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;}
     if(ref.type==='grouped'&&c.gdi!=null) return answers[c.sectionId+'__'+c.gdi]===c.value;
@@ -1891,7 +1892,6 @@ function buildConditionsUI(s){
       +'</div>';
   }).join('');
   var opSelector='<select class="condition-op-select" data-action="setCondOperator" data-sid="'+escA(s.id)+'"><option value="and"'+(op==='and'?' selected':'')+'>AND</option><option value="or"'+(op==='or'?' selected':'')+'>OR</option></select>';
-  var matchWord=op==='or'?'any':'all';
   return '<div class="conditions-section">'
     +'<div class="conditions-hdr">&#128274; Visibility conditions <span style="font-weight:400;color:var(--ink3)">&mdash; show only when '+opSelector+' conditions below are met (leave empty to always show). Hold Ctrl / ⌘ in the answer list to select multiple answers.</span></div>'
     +rows
@@ -2627,12 +2627,12 @@ function setRuleCondVal(ri,ci,selectedValues){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
   rule.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=='';}):[];
   delete rule.conditions[ci].value;
-  saveData();renderDocRules();
+  saveData(); renderDocRules();
 }
 function setRuleCondOperator(ri,op){
   var rule=DOC_RULES[ri]; if(!rule) return;
   rule.conditionOperator=op==='or'?'or':'and';
-  saveData();renderDocRules();
+  saveData(); renderDocRules();
 }
 
 /* ===== EVENT DELEGATION ===== */
