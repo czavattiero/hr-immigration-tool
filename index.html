@@ -3718,8 +3718,16 @@ async function EVL_generateDocx(){
   });
 
   var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
-  var hasGradNote = rows.some(function(r){ return r[9] && r[9].indexOf('**') !== -1; });
-  var hasProfessorNote = rows.some(function(r){ return r[9] && r[9].trim() === '*'; });
+  var hasGradNote = EVL_periods.some(function(p){
+    var bp = p.benProgram || '';
+    return bp === 'N/A' || (bp === '' && String(p.position).toLowerCase().indexOf('grad') !== -1);
+  });
+  var hasProfessorNote = EVL_periods.some(function(p){
+    var bp = p.benProgram || '';
+    return bp === 'TRU' || bp === 'SUP' ||
+      (bp === '' && (String(p.position).toLowerCase().indexOf('professor') !== -1 ||
+       String(p.position).toLowerCase().indexOf('postdoctoral') !== -1));
+  });
 
   var headerLabels = ['Position','NOC','Faculty','Department','Employment Status','Standard Hours of Work per Week','Employment Start Date','Employment End Date','Salary','Group Employer Benefit Plan* Eligibility'];
   var colWidths = [1500,700,1300,1200,900,1000,1000,1000,1000,1200];
