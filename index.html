@@ -3501,6 +3501,18 @@ function EVL_parseFile(file, kind){
       var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
       if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('Spreadsheet contains no worksheets');
       var ws = wb.Sheets[wb.SheetNames[0]];
+      // Recompute !ref from actual cell keys so that last row(s) are never missed
+      // when the file's internal range metadata is inaccurate.
+      var cellKeys = Object.keys(ws).filter(function(k){ return k[0] !== '!'; });
+      if(cellKeys.length){
+        var minR=Infinity,maxR=-Infinity,minC=Infinity,maxC=-Infinity;
+        cellKeys.forEach(function(k){
+          var c=XLSX.utils.decode_cell(k);
+          if(c.r<minR)minR=c.r; if(c.r>maxR)maxR=c.r;
+          if(c.c<minC)minC=c.c; if(c.c>maxC)maxC=c.c;
+        });
+        ws['!ref']=XLSX.utils.encode_range({s:{r:minR,c:minC},e:{r:maxR,c:maxC}});
+      }
       rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
     } catch(parseErr){
       console.warn('Unable to parse EVL spreadsheet file (' + kind + '):', file && file.name, parseErr);
