@@ -362,6 +362,8 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .condition-select[multiple]{padding:4px 6px;min-height:72px;resize:vertical}
 .condition-label{font-size:12px;color:var(--ink3);white-space:nowrap}
 .condition-and-label{font-size:11px;font-weight:700;color:var(--darkred);text-transform:uppercase;letter-spacing:.08em;padding:2px 0 2px 2px;opacity:.8}
+.condition-op-select{font-family:"DM Sans",sans-serif;font-size:12px;font-weight:600;border:1.5px solid var(--border2);border-radius:5px;padding:2px 22px 2px 7px;color:var(--darkred);background:#fff;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a6060' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;margin:0 4px;vertical-align:middle}
+.condition-op-select:focus{border-color:var(--red)}
 .add-cond-btn{font-size:12.5px;font-family:"DM Sans",sans-serif;background:none;border:1.5px dashed rgba(204,0,0,.3);border-radius:6px;padding:7px 14px;color:var(--red);cursor:pointer}
 .add-cond-btn:hover{border-color:var(--red);background:rgba(204,0,0,.04)}
 .del-cond-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:18px;padding:2px 6px;line-height:1}
@@ -1100,12 +1102,15 @@ function switchTab(tab){
 /* ===== INTAKE ===== */
 function conditionsMet(s){
   if(!s.conditions||s.conditions.length===0) return true;
-  return s.conditions.every(function(c){
+  var useOr=(s.conditionOperator||'and')==='or';
+  var fn=useOr?'some':'every';
+  return s.conditions[fn](function(c){
     var ref=DATA.find(function(r){return r.id===c.sectionId;});
-    if(!ref) return true;
+    /* unresolved ref: skip in AND (pass), exclude in OR (no match) */
+    if(!ref) return !useOr;
     if(ref.type==='dynamic'){var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;}
     if(ref.type==='grouped'&&c.gdi!=null) return answers[c.sectionId+'__'+c.gdi]===c.value;
-    return true;
+    return !useOr;
   });
 }
 function clearSectionAnswers(s){
@@ -1867,6 +1872,8 @@ function buildConditionsUI(s){
   var dynSections=DATA.filter(function(ds){return ds.id!==s.id&&ds.type==='dynamic';});
   if(dynSections.length===0) return '';
   var conds=s.conditions||[];
+  var op=s.conditionOperator||'and';
+  var opLabel=op==='or'?'OR':'AND';
   var rows=conds.map(function(c,ci){
     var secOpts=dynSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
     var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
@@ -1874,7 +1881,9 @@ function buildConditionsUI(s){
     var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
     if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
     var multiSize=refSec&&refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
-    return '<div class="condition-row">'
+    var sep=ci>0?'<div class="condition-and-label">'+opLabel+'</div>':'';
+    return sep
+      +'<div class="condition-row">'
       +'<span class="condition-label">If</span>'
       +'<select class="condition-select" data-action="setCondSec" data-sid="'+escA(s.id)+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
       +'<span class="condition-label">=</span>'
@@ -1882,8 +1891,9 @@ function buildConditionsUI(s){
       +'<button class="del-cond-btn" data-action="delCondition" data-sid="'+escA(s.id)+'" data-ci="'+ci+'">&times;</button>'
       +'</div>';
   }).join('');
+  var opSelector='<select class="condition-op-select" data-action="setCondOperator" data-sid="'+escA(s.id)+'"><option value="and"'+(op==='and'?' selected':'')+'>AND</option><option value="or"'+(op==='or'?' selected':'')+'>OR</option></select>';
   return '<div class="conditions-section">'
-    +'<div class="conditions-hdr">&#128274; Visibility conditions <span style="font-weight:400;color:var(--ink3)">&mdash; show only when all conditions below are met (leave empty to always show). Hold Ctrl / ⌘ in the answer list to select multiple answers.</span></div>'
+    +'<div class="conditions-hdr">&#128274; Visibility conditions <span style="font-weight:400;color:var(--ink3)">&mdash; show only when '+opSelector+' conditions below are met (leave empty to always show). Hold Ctrl / ⌘ in the answer list to select multiple answers.</span></div>'
     +rows
     +'<button class="add-cond-btn" data-action="addCondition" data-sid="'+escA(s.id)+'">+ Add condition</button>'
     +'</div>';
@@ -2355,6 +2365,11 @@ function setCondOpt(sid,ci,optIndices){
   delete s.conditions[ci].optionIndex;
   saveData();
 }
+function setCondOperator(sid,op){
+  var s=DATA.find(function(s){return s.id===sid;}); if(!s) return;
+  s.conditionOperator=op==='or'?'or':'and';
+  saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
+}
 
 function getItemArr(io){return Array.isArray(io.items)?io.items:(io.item?[io.item]:[]);}
 
@@ -2432,7 +2447,9 @@ function ruleConditionValues(c){
 
 function docRuleConditionsMet(rule){
   if(!rule.conditions||rule.conditions.length===0) return true;
-  return rule.conditions.every(function(c){
+  var useOr=(rule.conditionOperator||'and')==='or';
+  var fn=useOr?'some':'every';
+  return rule.conditions[fn](function(c){
     if(!c.sectionId) return false;
     var ref=DATA.find(function(r){return r.id===c.sectionId;});
     if(!ref) return false;
@@ -2457,6 +2474,8 @@ function buildDocRuleConditionsUI(ri,rule){
   var allSections=DATA.filter(function(ds){return ds.type==='dynamic'||ds.type==='grouped';});
   if(allSections.length===0) return '<div style="font-size:12px;color:var(--ink3);font-style:italic;margin-bottom:10px">No question sections available. Add a dynamic or grouped section first to use conditions.</div>';
   var conds=rule.conditions||[];
+  var op=rule.conditionOperator||'and';
+  var opLabel=op==='or'?'OR':'AND';
   var rows=conds.map(function(c,ci){
     var secOpts=allSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
     var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
@@ -2486,8 +2505,8 @@ function buildDocRuleConditionsUI(ri,rule){
       answerHtml='<span class="condition-label">=</span>'
         +'<select class="condition-select" disabled><option>-- select question first --</option></select>';
     }
-    var andLabel=ci>0?'<div class="condition-and-label">AND</div>':'';
-    return andLabel
+    var sep=ci>0?'<div class="condition-and-label">'+opLabel+'</div>':'';
+    return sep
       +'<div class="condition-row">'
       +'<span class="condition-label">If</span>'
       +'<select class="condition-select" data-action="setRuleCondSec" data-ri="'+ri+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
@@ -2495,8 +2514,9 @@ function buildDocRuleConditionsUI(ri,rule){
       +'<button class="del-cond-btn" data-action="delRuleCond" data-ri="'+ri+'" data-ci="'+ci+'">&times;</button>'
       +'</div>';
   }).join('');
+  var opSelector='<select class="condition-op-select" data-action="setRuleCondOperator" data-ri="'+ri+'"><option value="and"'+(op==='and'?' selected':'')+'>AND</option><option value="or"'+(op==='or'?' selected':'')+'>OR</option></select>';
   return '<div style="margin-bottom:12px">'
-    +'<div class="conditions-hdr" style="margin-bottom:8px">Conditions <span style="font-weight:400;color:var(--ink3)">&mdash; include documents only when <strong>all</strong> conditions below are met (leave empty to always include). Hold Ctrl / ⌘ to select multiple answers for dropdown questions.</span></div>'
+    +'<div class="conditions-hdr" style="margin-bottom:8px">Conditions <span style="font-weight:400;color:var(--ink3)">&mdash; include documents only when '+opSelector+' conditions below are met (leave empty to always include). Hold Ctrl / ⌘ to select multiple answers for dropdown questions.</span></div>'
     +rows
     +'<button class="add-cond-btn" data-action="addRuleCond" data-ri="'+ri+'">+ Add condition</button>'
     +'</div>';
@@ -2607,7 +2627,12 @@ function setRuleCondVal(ri,ci,selectedValues){
   var rule=DOC_RULES[ri]; if(!rule||!rule.conditions||!rule.conditions[ci]) return;
   rule.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=='';}):[];
   delete rule.conditions[ci].value;
-  saveData();renderDocRules();
+  saveData(); renderDocRules();
+}
+function setRuleCondOperator(ri,op){
+  var rule=DOC_RULES[ri]; if(!rule) return;
+  rule.conditionOperator=op==='or'?'or':'and';
+  saveData(); renderDocRules();
 }
 
 /* ===== EVENT DELEGATION ===== */
@@ -2700,6 +2725,10 @@ document.addEventListener('change',function(e){
     setRuleCondVal(parseInt(srcv.dataset.ri),parseInt(srcv.dataset.ci),selectedVals);
     return;
   }
+  var sco=e.target.closest('select[data-action="setCondOperator"]');
+  if(sco){setCondOperator(sco.dataset.sid,sco.value);return;}
+  var srco2=e.target.closest('select[data-action="setRuleCondOperator"]');
+  if(srco2){setRuleCondOperator(parseInt(srco2.dataset.ri),srco2.value);return;}
 });
 document.addEventListener('input',function(e){
   var fi=e.target.closest('input[data-action="upField"]');
