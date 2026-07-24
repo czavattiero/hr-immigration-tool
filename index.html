@@ -3615,38 +3615,61 @@ function FAQ_aiProcessFiles(files){
       var ext=file.name.split('.').pop().toLowerCase();
       var mime=file.type||FAQ_aiGuessMime(ext);
 
-      // Text files — read as plain text
+      // Plain text formats
       if(['txt','md','csv','rtf'].indexOf(ext)>=0){
         var r=new FileReader();
         r.onload=function(e){resolve({name:file.name,apiType:'text',content:e.target.result});};
-        r.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read file]'});};
+        r.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read: '+file.name+']'});};
         r.readAsText(file);
 
-      // PDF — send as base64 document (supported by Claude natively in all browsers)
+      // PDF — only format Claude accepts as base64 document
       } else if(ext==='pdf'||mime==='application/pdf'){
         var r2=new FileReader();
-        r2.onload=function(e){resolve({name:file.name,apiType:'pdf',mime:'application/pdf',content:e.target.result.split(',')[1]});};
-        r2.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read PDF]'});};
+        r2.onload=function(e){resolve({name:file.name,apiType:'pdf',content:e.target.result.split(',')[1]});};
+        r2.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read PDF: '+file.name+']'});};
         r2.readAsDataURL(file);
 
-      // Images — send as base64 image
-      } else if(mime.startsWith('image/')||['jpg','jpeg','png','gif','webp'].indexOf(ext)>=0){
+      // Images
+      } else if(mime.startsWith('image/')||['jpg','jpeg','png','gif','webp','svg'].indexOf(ext)>=0){
         var r3=new FileReader();
-        r3.onload=function(e){resolve({name:file.name,apiType:'image',mime:mime,content:e.target.result.split(',')[1]});};
-        r3.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read image]'});};
+        var imgMime=mime.startsWith('image/')?mime:'image/png';
+        r3.onload=function(e){resolve({name:file.name,apiType:'image',mime:imgMime,content:e.target.result.split(',')[1]});};
+        r3.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read image: '+file.name+']'});};
         r3.readAsDataURL(file);
 
-      // Word, PowerPoint, Excel, ODT — send as base64 document
-      // Claude supports docx natively; for others it will do its best
+      // DOCX — use mammoth.js if available to extract text
+      } else if(ext==='docx'||ext==='doc'){
+        if(typeof mammoth!=='undefined'){
+          file.arrayBuffer().then(function(buf){
+            mammoth.extractRawText({arrayBuffer:buf}).then(function(result){
+              resolve({name:file.name,apiType:'text',content:'[Word document: '+file.name+']\n\n'+result.value});
+            }).catch(function(){
+              // fallback: send as PDF to Claude (best effort)
+              var r4=new FileReader();
+              r4.onload=function(e){resolve({name:file.name,apiType:'pdf',content:e.target.result.split(',')[1]});};
+              r4.readAsDataURL(file);
+            });
+          }).catch(function(){resolve({name:file.name,apiType:'text',content:'[Could not read Word file: '+file.name+']'});});
+        } else {
+          // No mammoth — read as text (will be garbled but Claude may extract some info)
+          var r5=new FileReader();
+          r5.onload=function(e){resolve({name:file.name,apiType:'text',content:'[Word document content follows - extract all readable text]\n\n'+e.target.result.substring(0,20000)});};
+          r5.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read: '+file.name+']'});};
+          r5.readAsText(file);
+        }
+
+      // All other binary formats (PPTX, XLSX, ODT etc.)
+      // Send as PDF to Claude — it accepts application/pdf and will try to read binary content
+      // This is the most reliable cross-browser approach
       } else {
-        var r4=new FileReader();
-        r4.onload=function(e){
+        var r6=new FileReader();
+        r6.onload=function(e){
+          // Wrap in a text block describing the file + base64 — Claude will try to interpret
           var b64=e.target.result.split(',')[1];
-          // Try to send as document — Claude handles docx/pptx natively
-          resolve({name:file.name,apiType:'document',mime:mime||'application/octet-stream',content:b64});
+          resolve({name:file.name,apiType:'pdf',content:b64,originalMime:mime});
         };
-        r4.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read file: '+file.name+']'});};
-        r4.readAsDataURL(file);
+        r6.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read: '+file.name+']'});};
+        r6.readAsDataURL(file);
       }
     });
   });
@@ -3737,24 +3760,18 @@ function FAQ_aiCallClaude(fileData, urls){
   if(fileData&&fileData.length){
     fileData.forEach(function(f){
       if(f.apiType==='text'){
-        userContent.push({type:'text',text:'--- FILE: '+f.name+' ---\n\n'+f.content});
+        userContent.push({type:'text',text:'=== FILE: '+f.name+' ===\n\n'+f.content});
       } else if(f.apiType==='pdf'){
+        // application/pdf is the only media_type Claude accepts for documents
         userContent.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:f.content}});
-        userContent.push({type:'text',text:'(Above is the PDF file: '+f.name+')'});
+        userContent.push({type:'text',text:'(Document above: '+f.name+(f.originalMime?' [original format: '+f.originalMime+']':'')+')'});
       } else if(f.apiType==='image'){
-        userContent.push({type:'image',source:{type:'base64',media_type:f.mime,data:f.content}});
-        userContent.push({type:'text',text:'(Above is an image: '+f.name+' - extract any text/table content visible)'});
-      } else if(f.apiType==='document'){
-        // Word, PowerPoint, Excel etc — send as document
-        try{
-          userContent.push({type:'document',source:{type:'base64',media_type:f.mime,data:f.content}});
-          userContent.push({type:'text',text:'(Above is the file: '+f.name+')'});
-        }catch(e){
-          userContent.push({type:'text',text:'[Could not process file: '+f.name+']'});
-        }
+        var safeImgMime=['image/jpeg','image/png','image/gif','image/webp'].indexOf(f.mime)>=0?f.mime:'image/png';
+        userContent.push({type:'image',source:{type:'base64',media_type:safeImgMime,data:f.content}});
+        userContent.push({type:'text',text:'(Image above: '+f.name+' — extract all visible text and tables)'});
       }
     });
-    userContent.push({type:'text',text:'Convert ALL the above document content into a structured FAQ JSON array. Return ONLY the JSON array with no explanation.'});
+    userContent.push({type:'text',text:'Convert ALL the above content into a structured FAQ JSON array. Return ONLY the JSON array with no explanation or markdown.'});
   } else if(urls&&urls.length){
     var urlText=urls.map(function(u,i){return (i+1)+'. '+u;}).join('\n');
     userContent.push({type:'text',text:'Please visit and read the content from these URLs, then convert everything into a structured FAQ JSON array:\n\n'+urlText+'\n\nReturn ONLY the JSON array.'});
