@@ -3678,50 +3678,53 @@ function FAQ_aiScrapeUrls(){
   FAQ_AI_urlList=raw.split(/[\n\r]+/).map(function(u){return u.trim();}).filter(function(u){return u.length>0;});
   FAQ_AI_mode='url';
   FAQ_aiHideInput();
-  FAQ_aiSetStatus('Fetching <strong>'+FAQ_AI_urlList.length+' URL(s)</strong>...','show');
   FAQ_aiShowLoading('Fetching page 1 of '+FAQ_AI_urlList.length+'...');
 
-  // Fetch each URL via CORS proxy, extract text, then send to Claude
+  // Use r.jina.ai — converts any URL to clean markdown, handles JS-rendered pages
   var fetched=[];
   var remaining=FAQ_AI_urlList.length;
+
   FAQ_AI_urlList.forEach(function(url,i){
     FAQ_aiSetLoadingMsg('Fetching page '+(i+1)+' of '+FAQ_AI_urlList.length+'...');
-    // Try allorigins.win CORS proxy
-    var proxyUrl='https://api.allorigins.win/get?url='+encodeURIComponent(url);
-    fetch(proxyUrl)
-      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
-      .then(function(data){
-        var html=data.contents||'';
-        // Strip HTML tags to get plain text
-        var tmp=document.createElement('div');
-        tmp.innerHTML=html;
-        // Remove scripts and styles
-        tmp.querySelectorAll('script,style,nav,footer,header').forEach(function(el){el.remove();});
-        var text=tmp.innerText||tmp.textContent||'';
-        // Clean up whitespace
-        text=text.replace(/[ \t]*[\n\r]{2,}[ \t]*/g,'\n\n').trim();
-        fetched.push({url:url,text:text.substring(0,15000)});
-      })
-      .catch(function(err){
-        fetched.push({url:url,text:'[Failed to fetch: '+err.message+']'});
-      })
-      .finally(function(){
-        remaining--;
-        if(remaining===0){
-          FAQ_aiSetLoadingMsg('Analysing with AI...');
-          FAQ_aiCallClaudeFromText(fetched);
-        }
-      });
+    // jina.ai Reader API: prefix any URL with https://r.jina.ai/ to get clean text
+    fetch('https://r.jina.ai/'+url,{
+      headers:{'Accept':'text/plain','X-Return-Format':'text'}
+    })
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status+' for '+url);
+      return r.text();
+    })
+    .then(function(text){
+      // Trim to reasonable size
+      fetched.push({url:url, text:text.substring(0,20000)});
+    })
+    .catch(function(err){
+      // Fall back to trying without headers (some proxies need no custom headers)
+      return fetch('https://r.jina.ai/'+url)
+        .then(function(r2){return r2.text();})
+        .then(function(text){fetched.push({url:url,text:text.substring(0,20000)});})
+        .catch(function(){fetched.push({url:url,text:'[Could not fetch: '+url+']'});});
+    })
+    .finally(function(){
+      remaining--;
+      if(remaining===0){
+        FAQ_aiSetLoadingMsg('Analysing content with AI...');
+        var combined=fetched.map(function(p){
+          return 'SOURCE URL: '+p.url+'\n\n'+p.text;
+        }).join('\n\n---\n\n');
+        FAQ_aiCallClaude([{name:'web-content.txt',apiType:'text',content:combined}],null);
+      }
+    });
   });
 }
 
-function FAQ_aiCallClaudeFromText(pages){
-  var combined=pages.map(function(p){
-    return 'SOURCE: '+p.url+'\n\n'+p.text;
-  }).join('\n\n---\n\n');
-  // Call Claude with the extracted text as a file
-  FAQ_aiCallClaude([{name:'web-content.txt',type:'text',content:combined}],null);
+function FAQ_aiCallClaudeUrls(){}  // kept for compatibility
+function FAQ_aiContinueConversation(){}  // kept for compatibility
+
+function FAQ_aiGetSystemPrompt(){
+  return 'You are an expert at converting HR documentation into structured FAQ content for a university immigration services team. Analyse all provided content thoroughly and return ONLY a valid JSON array with no explanation, no markdown fences. The JSON must follow this exact schema: [{"title":"Section title","topics":[{"title":"Topic title","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}]}]}]}] Rules: answers must be valid HTML. Preserve ALL information never summarise or omit. Use tables for comparative data. Group related content into logical subtopics. Return ONLY the JSON array nothing else.';
 }
+
 
 /* ── Call Claude API ── */
 function FAQ_aiCallClaude(fileData, urls){
