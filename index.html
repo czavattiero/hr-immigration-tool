@@ -3508,6 +3508,57 @@ document.addEventListener('change',function(e){
 });
 
 
+/* ===== FAQ AI KEY MANAGEMENT ===== */
+var FAQ_AI_KEY_CACHE = '';  // in-memory cache so we don't hit Supabase on every call
+
+function FAQ_getApiKey(){
+  return FAQ_AI_KEY_CACHE || localStorage.getItem('faq_anthropic_key') || '';
+}
+
+function FAQ_loadApiKey(){
+  // Load from Supabase on startup, cache it
+  sbReadKey('anthropic_api_key').then(function(row){
+    if(row && row.content){
+      FAQ_AI_KEY_CACHE = row.content;
+      localStorage.setItem('faq_anthropic_key', row.content); // local fallback
+    }
+  }).catch(function(){
+    // Fall back to localStorage if Supabase unavailable
+    FAQ_AI_KEY_CACHE = localStorage.getItem('faq_anthropic_key') || '';
+  });
+}
+
+function FAQ_saveApiKey(key){
+  FAQ_AI_KEY_CACHE = key;
+  localStorage.setItem('faq_anthropic_key', key); // immediate local save
+  // Save to Supabase so it's available on all browsers
+  sbWriteKey('anthropic_api_key', key).then(function(){
+    showToast('API key saved to all devices ✓');
+  }).catch(function(){
+    showToast('API key saved locally only (Supabase offline)');
+  });
+}
+
+function FAQ_promptApiKey(){
+  var current = FAQ_getApiKey();
+  var masked = current ? current.substring(0,10)+'...' : '';
+  var key = prompt(
+    'Enter your Anthropic API key\n(starts with sk-ant-)\n\n'
+    + (masked ? 'Current key: '+masked+'\n\n' : '')
+    + 'The key is stored in Supabase so it works on all browsers automatically.',
+    ''
+  );
+  if(key === null) return false;
+  key = key.trim();
+  if(!key){ alert('No key entered.'); return false; }
+  if(!key.startsWith('sk-ant-')){
+    alert('That does not look like an Anthropic API key (should start with sk-ant-). Please check and try again.');
+    return false;
+  }
+  FAQ_saveApiKey(key);
+  return true;
+}
+
 /* ===== FAQ AI DOCUMENT IMPORTER ===== */
 var FAQ_AI_pending   = null;
 var FAQ_AI_fileObjs  = [];   // multiple files supported
@@ -3516,6 +3567,9 @@ var FAQ_AI_mode      = 'file'; // 'file' or 'url'
 
 /* ── Open modal from toolbar button ── */
 function FAQ_aiOpen(){
+  if(!FAQ_getApiKey()){
+    if(!FAQ_promptApiKey()) return;
+  }
   FAQ_AI_pending = null;FAQ_AI_fileObjs=[];FAQ_AI_urlList=[];
   var modal=document.getElementById('faq-ai-modal');
   modal.classList.remove('hidden');
@@ -3666,7 +3720,7 @@ function FAQ_aiCallClaude(fileData, urls){
 
   fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
-    headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+    headers:{'Content-Type':'application/json','x-api-key':FAQ_getApiKey(),'anthropic-dangerous-direct-browser-access':'true','anthropic-version':'2023-06-01'},
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:8000,
@@ -3912,6 +3966,7 @@ var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
 loadData();
 FAQ_load();
+FAQ_loadApiKey();
 FAQ_initDeepLinks();</script>
 <script>
 /* ===== EVL: Employment Verification Letter (additive, self-contained) ===== */
