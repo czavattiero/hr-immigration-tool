@@ -3420,7 +3420,7 @@ function FAQ_aiExtractOfficeText(name, ext, arrayBuf){
               var text=xmlStr.replace(/<[^>]+>/g,' ').replace(/\s{2,}/g,' ').trim();
               if(text.length>50) textParts.push(text);
               pending--;
-              if(pending===0) resolve(textParts.join('\n\n').substring(0,20000));
+              if(pending===0) resolve(textParts.join('\n\n').substring(0,50000));
             }).catch(function(){pending--;if(pending===0)resolve(textParts.join('\n\n'));});
           });
         }).catch(function(){resolve('[Could not unzip '+name+']');});
@@ -3540,6 +3540,8 @@ function FAQ_importBackup(ev){
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;
   var a=el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
+  // Ignore clicks inside the AI importer modal (it has its own handlers)
+  if(e.target.closest('#faq-ai-modal')) return;
   e.stopPropagation();
   // Collapsibles
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
@@ -3724,11 +3726,24 @@ function FAQ_aiProcessFiles(files){
       } else if(ext==='docx'||ext==='doc'){
         file.arrayBuffer().then(function(buf){
           if(typeof mammoth!=='undefined'){
-            mammoth.extractRawText({arrayBuffer:buf}).then(function(result){
-              var txt=result.value||'';
+            mammoth.convertToHtml({arrayBuffer:buf}).then(function(result){
+              // Get HTML then strip tags to preserve structure as plain text
+              var html=result.value||'';
+              var tmp=document.createElement('div');
+              tmp.innerHTML=html;
+              // Convert block elements to newlines before stripping
+              tmp.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,br,tr').forEach(function(el){
+                el.insertAdjacentText('afterend','\n');
+              });
+              var txt=(tmp.innerText||tmp.textContent||'').replace(/\n{3,}/g,'\n\n').trim();
               resolve({name:file.name,apiType:'text',content:'[Word document: '+file.name+']\n\n'+txt});
             }).catch(function(e){
-              resolve({name:file.name,apiType:'text',content:'[Word doc: '+file.name+' — could not extract text: '+e.message+']'});
+              // Fallback to raw text
+              mammoth.extractRawText({arrayBuffer:buf}).then(function(r2){
+                resolve({name:file.name,apiType:'text',content:'[Word document: '+file.name+']\n\n'+(r2.value||'')});
+              }).catch(function(){
+                resolve({name:file.name,apiType:'text',content:'[Word doc: '+file.name+' — could not extract text: '+e.message+']'});
+              });
             });
           } else {
             resolve({name:file.name,apiType:'text',content:'[Word doc: '+file.name+' — mammoth.js not loaded. Please save as .txt and re-upload.]'});
@@ -3752,7 +3767,7 @@ function FAQ_aiProcessFiles(files){
       } else {
         var r6=new FileReader();
         r6.onload=function(e){
-          resolve({name:file.name,apiType:'text',content:'[File: '+file.name+' ('+ext+')]\n\n'+e.target.result.substring(0,20000)});
+          resolve({name:file.name,apiType:'text',content:'[File: '+file.name+' ('+ext+')]\n\n'+e.target.result.substring(0,50000)});
         };
         r6.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read: '+file.name+']'});};
         r6.readAsText(file);
@@ -3805,13 +3820,13 @@ function FAQ_aiScrapeUrls(){
     })
     .then(function(text){
       // Trim to reasonable size
-      fetched.push({url:url, text:text.substring(0,20000)});
+      fetched.push({url:url, text:text.substring(0,50000)});
     })
     .catch(function(err){
       // Fall back to trying without headers (some proxies need no custom headers)
       return fetch('https://r.jina.ai/'+url)
         .then(function(r2){return r2.text();})
-        .then(function(text){fetched.push({url:url,text:text.substring(0,20000)});})
+        .then(function(text){fetched.push({url:url,text:text.substring(0,50000)});})
         .catch(function(){fetched.push({url:url,text:'[Could not fetch: '+url+']'});});
     })
     .finally(function(){
@@ -3853,7 +3868,7 @@ function FAQ_aiCallClaude(fileData, urls){
         userContent.push({type:'text',text:'(Image: '+f.name+' — extract all visible text)'});
       }
     });
-    userContent.push({type:'text',text:'Convert the content above into a FAQ JSON array. Output ONLY the JSON, nothing else. Start your response with [ and end with ].'});
+    userContent.push({type:'text',text:'Read the ENTIRE document above from start to finish. Convert ALL content — every section, every step, every field name, every table, every note, every example — into a comprehensive FAQ JSON array. Do not stop early. Do not summarize. Include everything. Output ONLY the JSON array starting with [ and ending with ]. No other text.'});
   } else if(urls&&urls.length){
     userContent.push({type:'text',text:'Convert this content into a FAQ JSON array. Output ONLY the JSON, nothing else. Start with [ and end with ].\n\n'+urls.join('\n')});
   }
