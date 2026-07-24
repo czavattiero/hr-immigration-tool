@@ -843,6 +843,28 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 
 
 
+
+<div class="modal-overlay hidden" id="faq-move-modal" style="z-index:3000">
+  <div class="modal" style="max-width:500px;width:92%">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">&#8645; Move to&hellip;</div>
+    <div id="faq-move-subtitle" style="font-size:12.5px;color:var(--ink3);margin-bottom:14px"></div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Move as:</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" id="faq-move-as-topic" onclick="FAQ_moveSetType('topic')">&#128193; Topic (in a Section)</button>
+        <button class="btn btn-secondary btn-sm" id="faq-move-as-subtopic" onclick="FAQ_moveSetType('subtopic')">&#128196; Subtopic (in a Topic)</button>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px" id="faq-move-dest-label">Destination:</label>
+      <select id="faq-move-dest" style="width:100%;border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:13.5px;font-family:inherit"></select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" onclick="FAQ_moveExecute()">&#10003; Move here</button>
+      <button class="btn btn-secondary btn-sm" onclick="FAQ_moveCancel()">Cancel</button>
+    </div>
+  </div>
+</div>
 <script>
 /*
 /* ===== UTILS ===== */
@@ -3838,7 +3860,7 @@ function FAQ_aiCallClaude(fileData, urls){
 
   FAQ_aiDoApiCall(
     userContent,
-    'You convert documents into structured FAQ JSON for a university HR immigration team. You ALWAYS respond with ONLY a valid JSON array — no explanation, no markdown, no code fences. The array starts with [ and ends with ]. Each element: {"title":"Section","topics":[{"title":"Topic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML answer</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}]}]}]}. Use HTML in answers (p, ul, li, table, strong). Preserve ALL details.',
+    'You are an expert at converting HR documents into structured FAQ JSON. CRITICAL: Capture EVERY piece of information — every step, number, name, date, field, table row, and note. Do NOT summarize, skip, or abbreviate anything. Respond with ONLY a valid JSON array starting with [ and ending with ]. No explanation, no markdown, no code fences. Schema: [{"title":"Section","topics":[{"title":"Topic","items":[{"type":"freetext","question":"Q?","answer":"<p>Full HTML answer</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>Full HTML</p>"}]}]}]}]. Use rich HTML in answers: p, ul, li, ol, table, tr, td, th, strong, em. Use tables for tabular data. Use ol/li for numbered steps. Each answer must be complete — include all details from the source.',
     function(raw){ FAQ_aiParseAndShow(raw, userContent); }
   );
 }
@@ -3854,7 +3876,7 @@ function FAQ_aiDoApiCall(userContent, systemPrompt, onSuccess){
     },
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
-      max_tokens:8000,
+      max_tokens:16000,
       system:systemPrompt,
       messages:[{role:'user',content:userContent}]
     })
@@ -4147,54 +4169,152 @@ function FAQ_initDeepLinks(){
 
 
 /* ===== FAQ MOVE TO ===== */
+/* ── Move to modal state ── */
+var FAQ_MOVE_STATE = null;
+// {type:'topic'|'subtopic', sid, tid, stid, moveAs:'topic'|'subtopic'}
+
 function FAQ_moveTopicToPrompt(sid, tid){
-  var topic=FAQ_findTopic(tid);
-  if(!topic)return;
-  // Build flat list of target sections (excluding current)
-  var targets=FAQ_DATA.filter(function(s){return s.id!==sid;});
-  if(!targets.length){alert('No other sections to move this topic to.');return;}
-  var list=targets.map(function(s,i){return (i+1)+'. '+(s.title||'(untitled section)');}).join('\n');
-  var choice=prompt('Move topic "'+topic.title+'" to which section?\n\n'+list+'\n\nEnter a number:');
-  if(!choice)return;
-  var n=parseInt(choice.trim())-1;
-  if(isNaN(n)||n<0||n>=targets.length){alert('Invalid selection. Please enter a number from 1 to '+targets.length+'.');return;}
-  var targetSec=targets[n];
-  // Move
-  var srcSec=FAQ_findSection(sid);
-  if(!srcSec)return;
-  srcSec.topics=(srcSec.topics||[]).filter(function(t){return t.id!==tid;});
-  if(!targetSec.topics)targetSec.topics=[];
-  targetSec.topics.push(topic);
-  FAQ_save();FAQ_renderEditor();
-  showToast('Topic moved to "'+(targetSec.title||'section')+'" ✓');
+  var topic = FAQ_findTopic(tid);
+  if(!topic) return;
+  FAQ_MOVE_STATE = {type:'topic', sid:sid, tid:tid, moveAs:'topic'};
+  document.getElementById('faq-move-subtitle').textContent = 'Moving topic: "' + (topic.title||'untitled') + '"';
+  // Default: move as topic into a section
+  FAQ_moveSetType('topic');
+  document.getElementById('faq-move-modal').classList.remove('hidden');
 }
 
 function FAQ_moveSubtopicToPrompt(sid, tid, stid){
-  var st=FAQ_findSubtopic(tid,stid);
-  if(!st)return;
-  // Build flat list of all topics except current
-  var targets=[];
-  FAQ_DATA.forEach(function(sec){
-    (sec.topics||[]).forEach(function(t){
-      if(t.id!==tid) targets.push({sec:sec,topic:t});
-    });
-  });
-  if(!targets.length){alert('No other topics to move this subtopic to.');return;}
-  var list=targets.map(function(o,i){return (i+1)+'. ['+(o.sec.title||'Section')+'] '+(o.topic.title||'(untitled)');}).join('\n');
-  var choice=prompt('Move subtopic "'+st.title+'" to which topic?\n\n'+list+'\n\nEnter a number:');
-  if(!choice)return;
-  var n=parseInt(choice.trim())-1;
-  if(isNaN(n)||n<0||n>=targets.length){alert('Invalid selection. Please enter a number from 1 to '+targets.length+'.');return;}
-  var target=targets[n];
-  // Move
-  var srcTopic=FAQ_findTopic(tid);
-  if(!srcTopic)return;
-  srcTopic.subtopics=(srcTopic.subtopics||[]).filter(function(s){return s.id!==stid;});
-  if(!target.topic.subtopics)target.topic.subtopics=[];
-  target.topic.subtopics.push(st);
-  FAQ_save();FAQ_renderEditor();
-  showToast('Subtopic moved to "'+(target.topic.title||'topic')+'" ✓');
+  var st = FAQ_findSubtopic(tid, stid);
+  if(!st) return;
+  FAQ_MOVE_STATE = {type:'subtopic', sid:sid, tid:tid, stid:stid, moveAs:'subtopic'};
+  document.getElementById('faq-move-subtitle').textContent = 'Moving subtopic: "' + (st.title||'untitled') + '"';
+  FAQ_moveSetType('subtopic');
+  document.getElementById('faq-move-modal').classList.remove('hidden');
 }
+
+function FAQ_moveSetType(moveAs){
+  if(!FAQ_MOVE_STATE) return;
+  FAQ_MOVE_STATE.moveAs = moveAs;
+
+  // Update button styles
+  var btnTopic    = document.getElementById('faq-move-as-topic');
+  var btnSubtopic = document.getElementById('faq-move-as-subtopic');
+  if(btnTopic)    btnTopic.style.background    = moveAs==='topic'    ? 'var(--red)' : '';
+  if(btnTopic)    btnTopic.style.color         = moveAs==='topic'    ? '#fff' : '';
+  if(btnSubtopic) btnSubtopic.style.background = moveAs==='subtopic' ? 'var(--red)' : '';
+  if(btnSubtopic) btnSubtopic.style.color      = moveAs==='subtopic' ? '#fff' : '';
+
+  var sel = document.getElementById('faq-move-dest');
+  var lbl = document.getElementById('faq-move-dest-label');
+  sel.innerHTML = '';
+
+  if(moveAs === 'topic'){
+    // Destination = a section (any section including current is OK)
+    lbl.textContent = 'Choose destination section:';
+    FAQ_DATA.forEach(function(sec, i){
+      var opt = document.createElement('option');
+      opt.value = sec.id;
+      opt.textContent = (i+1) + '. ' + (sec.title || '(untitled section)');
+      if(FAQ_MOVE_STATE && sec.id === FAQ_MOVE_STATE.sid) opt.textContent += ' (current)';
+      sel.appendChild(opt);
+    });
+  } else {
+    // Destination = a topic (any topic, different from current)
+    lbl.textContent = 'Choose destination topic:';
+    FAQ_DATA.forEach(function(sec, si){
+      (sec.topics||[]).forEach(function(t, ti){
+        var isCurrent = FAQ_MOVE_STATE && t.id === FAQ_MOVE_STATE.tid;
+        var opt = document.createElement('option');
+        opt.value = sec.id + '||' + t.id;
+        opt.textContent = '[' + (sec.title||'Section') + '] ' + (t.title||'(untitled topic)') + (isCurrent?' (current)':'');
+        if(isCurrent) opt.disabled = true;
+        sel.appendChild(opt);
+      });
+    });
+  }
+}
+
+function FAQ_moveExecute(){
+  if(!FAQ_MOVE_STATE) return;
+  var sel = document.getElementById('faq-move-dest');
+  var destVal = sel.value;
+  var moveAs = FAQ_MOVE_STATE.moveAs;
+
+  if(moveAs === 'topic'){
+    // Move the item (topic or subtopic) into destVal section as a topic
+    var destSec = FAQ_findSection(destVal);
+    if(!destSec){ alert('Could not find destination section.'); return; }
+
+    if(FAQ_MOVE_STATE.type === 'topic'){
+      // Move topic → topic in another section
+      var srcSec = FAQ_findSection(FAQ_MOVE_STATE.sid);
+      if(!srcSec) return;
+      var topic = FAQ_findTopic(FAQ_MOVE_STATE.tid);
+      if(!topic) return;
+      srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== FAQ_MOVE_STATE.tid; });
+      if(!destSec.topics) destSec.topics = [];
+      destSec.topics.push(topic);
+      showToast('Topic moved to "' + (destSec.title||'section') + '" ✓');
+
+    } else {
+      // Move subtopic → becomes a topic in a section
+      var srcTopic = FAQ_findTopic(FAQ_MOVE_STATE.tid);
+      if(!srcTopic) return;
+      var st = FAQ_findSubtopic(FAQ_MOVE_STATE.tid, FAQ_MOVE_STATE.stid);
+      if(!st) return;
+      srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== FAQ_MOVE_STATE.stid; });
+      // Convert subtopic to topic format
+      var newTopic = {id: st.id, title: st.title, _open: false, items: st.items||[], subtopics:[]};
+      if(!destSec.topics) destSec.topics = [];
+      destSec.topics.push(newTopic);
+      showToast('Subtopic promoted to topic in "' + (destSec.title||'section') + '" ✓');
+    }
+
+  } else {
+    // Move item into a topic as a subtopic
+    var parts = destVal.split('||');
+    var destTopic = FAQ_findTopic(parts[1]);
+    if(!destTopic){ alert('Could not find destination topic.'); return; }
+
+    if(FAQ_MOVE_STATE.type === 'topic'){
+      // Move topic → becomes a subtopic in another topic
+      var srcSec2 = FAQ_findSection(FAQ_MOVE_STATE.sid);
+      if(!srcSec2) return;
+      var topic2 = FAQ_findTopic(FAQ_MOVE_STATE.tid);
+      if(!topic2) return;
+      srcSec2.topics = (srcSec2.topics||[]).filter(function(t){ return t.id !== FAQ_MOVE_STATE.tid; });
+      // Convert topic to subtopic format (items only, subtopics become items)
+      var allItems = (topic2.items||[]);
+      (topic2.subtopics||[]).forEach(function(st){ allItems = allItems.concat(st.items||[]); });
+      var newSub = {id: topic2.id, title: topic2.title, _open: false, items: allItems};
+      if(!destTopic.subtopics) destTopic.subtopics = [];
+      destTopic.subtopics.push(newSub);
+      showToast('Topic demoted to subtopic in "' + (destTopic.title||'topic') + '" ✓');
+
+    } else {
+      // Move subtopic → subtopic in another topic
+      var srcTopic2 = FAQ_findTopic(FAQ_MOVE_STATE.tid);
+      if(!srcTopic2) return;
+      var st2 = FAQ_findSubtopic(FAQ_MOVE_STATE.tid, FAQ_MOVE_STATE.stid);
+      if(!st2) return;
+      srcTopic2.subtopics = (srcTopic2.subtopics||[]).filter(function(s){ return s.id !== FAQ_MOVE_STATE.stid; });
+      if(!destTopic.subtopics) destTopic.subtopics = [];
+      destTopic.subtopics.push(st2);
+      showToast('Subtopic moved to "' + (destTopic.title||'topic') + '" ✓');
+    }
+  }
+
+  FAQ_moveCancel();
+  FAQ_save();
+  FAQ_renderEditor();
+}
+
+function FAQ_moveCancel(){
+  FAQ_MOVE_STATE = null;
+  var modal = document.getElementById('faq-move-modal');
+  if(modal) modal.classList.add('hidden');
+}
+
 
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
