@@ -3540,8 +3540,11 @@ function FAQ_importBackup(ev){
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;
   var a=el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
-  // Ignore clicks inside the AI importer modal (it has its own handlers)
-  if(e.target.closest('#faq-ai-modal')) return;
+  // Ignore all FAQ delegation when any modal is open
+  if(!document.getElementById('faq-ai-modal').classList.contains('hidden')) return;
+  if(!document.getElementById('faq-move-modal').classList.contains('hidden')) return;
+  // Ignore clicks inside modals
+  if(e.target.closest('#faq-ai-modal')||e.target.closest('#faq-move-modal')) return;
   e.stopPropagation();
   // Collapsibles
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
@@ -3881,29 +3884,49 @@ function FAQ_aiCallClaude(fileData, urls){
 }
 
 function FAQ_aiDoApiCall(userContent, systemPrompt, onSuccess){
+  var headers={
+    'Content-Type':'application/json',
+    'x-api-key':FAQ_getApiKey(),
+    'anthropic-dangerous-direct-browser-access':'true',
+    'anthropic-version':'2023-06-01'
+  };
+
+  // Turn 1: Extract all content from the document as structured notes
+  FAQ_aiSetLoadingMsg('Reading document (step 1/2)...');
+  var extractPrompt='Read this document completely from start to finish. Extract ALL information as detailed structured notes. Include every section heading, every step, every field name, every table, every list item, every example, every note. Do not summarize or skip anything. Format as clear numbered sections with all details preserved.';
+
   fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':FAQ_getApiKey(),
-      'anthropic-dangerous-direct-browser-access':'true',
-      'anthropic-version':'2023-06-01'
-    },
+    method:'POST',headers:headers,
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
-      max_tokens:16000,
-      system:systemPrompt,
-      messages:[{role:'user',content:userContent}]
+      max_tokens:8000,
+      messages:[{role:'user',content:userContent.concat([{type:'text',text:extractPrompt}])}]
     })
   })
-  .then(function(r){
-    if(!r.ok) return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,300));});
-    return r.json();
-  })
+  .then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,300));});return r.json();})
   .then(function(data){
-    var text=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-    if(!text) throw new Error('Empty response from API');
-    onSuccess(text);
+    var notes=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+    if(!notes) throw new Error('Could not extract document content');
+
+    // Turn 2: Convert the extracted notes to FAQ JSON
+    FAQ_aiSetLoadingMsg('Creating FAQ (step 2/2)...');
+    var convertMsg=[{type:'text',text:'Here are the complete structured notes from the document:\n\n'+notes+'\n\nNow convert ALL of this into a FAQ JSON array. Include every piece of information. Output ONLY the JSON array starting with [ and ending with ]. No explanation, no markdown fences.'}];
+
+    return fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:headers,
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:16000,
+        system:systemPrompt,
+        messages:[{role:'user',content:convertMsg}]
+      })
+    })
+    .then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,300));});return r.json();})
+    .then(function(data2){
+      var text=(data2.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+      if(!text) throw new Error('Empty response in step 2');
+      onSuccess(text);
+    });
   })
   .catch(function(err){
     FAQ_aiHideLoading();
