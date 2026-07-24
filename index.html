@@ -780,7 +780,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="FAQ_exportBackup()">Export backup</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer">Import backup<input type="file" accept=".json" onchange="FAQ_importBackup(event)" style="display:none"></label>
-        <label class="btn btn-sm" style="cursor:pointer;background:var(--darkred);color:#fff;border:none">&#129302; Import from document<input type="file" accept=".pdf,.doc,.docx,.odt,.txt,.ppt,.pptx,.xls,.xlsx,.csv,.rtf,.md,image/*" onchange="FAQ_aiImport(event)" style="display:none"></label>
+        <button class="btn btn-sm" style="background:var(--darkred);color:#fff;border:none" onclick="FAQ_aiOpen()">&#129302; Import from document</button>
       </div>
     </div>
     <div class="save-note" style="margin-bottom:16px">All FAQ changes save automatically to Supabase and sync to all editors within 10 seconds.</div>
@@ -3814,13 +3814,13 @@ function FAQ_navigateToHash(hash){
           }
           setTimeout(function(){
             var el=document.getElementById('ftopic-'+topicId);
-            if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+            if(el){var nav=document.querySelector('.nav');var offset=nav?nav.offsetHeight+8:60;var y=el.getBoundingClientRect().top+window.scrollY-offset;window.scrollTo({top:y,behavior:'smooth'});}
           },100);
         }
       } else {
         setTimeout(function(){
           var el=document.getElementById('fsec-'+secId);
-          if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+          if(el){var nav=document.querySelector('.nav');var offset=nav?nav.offsetHeight+8:60;var y=el.getBoundingClientRect().top+window.scrollY-offset;window.scrollTo({top:y,behavior:'smooth'});}
         },100);
       }
     }
