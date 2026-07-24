@@ -792,7 +792,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 
 <div class="modal-overlay hidden" id="faq-ai-modal" style="z-index:2000">
   <div class="modal" style="max-width:600px;width:95%">
-    <div style="font-size:17px;font-weight:700;margin-bottom:14px">&#129302; AI FAQ Importer</div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:14px">&#129302; FAQ Importer</div>
 
     <!-- Input panel -->
     <div id="faq-ai-input-panel">
@@ -844,6 +844,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 
 
 <script>
+/*
 /* ===== UTILS ===== */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escA(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -3145,6 +3146,7 @@ function FAQ_buildTopicBlock(sec,topic,ti){
     +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" onclick="event.stopPropagation()">'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+'>&#8593;</button>'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="1" '+(ti===nTopics-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopicTo" data-sid="'+sec.id+'" data-tid="'+topic.id+'" title="Move to different section">&#8645; Move to&hellip;</button>'
     +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">Delete topic</button>'
     +'</div>'
     +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedTopicItems-'+topic.id+'">'
@@ -3167,6 +3169,7 @@ function FAQ_buildSubtopicBlock(sec,topic,st,si){
     +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+(si===nSt-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopicTo" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" title="Move to different topic">&#8645; Move to&hellip;</button>'
     +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">Delete subtopic</button>'
     +'</div>'
     +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedSubItems-'+st.id+'">'
@@ -3527,6 +3530,8 @@ document.addEventListener('click',function(e){
   if(a==='FAQ_toggleMedia'){FAQ_toggleMedia(el.dataset.iid);return;}
   // Sections
   if(a==='FAQ_addSection'){FAQ_addSection();return;}
+  if(a==='FAQ_moveTopicTo'){FAQ_moveTopicToPrompt(el.dataset.sid,el.dataset.tid);return;}
+  if(a==='FAQ_moveSubtopicTo'){FAQ_moveSubtopicToPrompt(el.dataset.sid,el.dataset.tid,el.dataset.stid);return;}
   if(a==='FAQ_delSection'){FAQ_delSection(el.dataset.sid);return;}
   if(a==='FAQ_moveSection'){FAQ_moveSection(el.dataset.sid,parseInt(el.dataset.dir));return;}
   // Topics
@@ -3790,7 +3795,7 @@ function FAQ_aiScrapeUrls(){
     .finally(function(){
       remaining--;
       if(remaining===0){
-        FAQ_aiSetLoadingMsg('Analysing content with AI...');
+        FAQ_aiSetLoadingMsg('Creating FAQ...');
         var combined=fetched.map(function(p){
           return 'SOURCE URL: '+p.url+'\n\n'+p.text;
         }).join('\n\n---\n\n');
@@ -3810,7 +3815,7 @@ function FAQ_aiGetSystemPrompt(){
 
 /* ── Call Claude API ── */
 function FAQ_aiCallClaude(fileData, urls){
-  FAQ_aiSetLoadingMsg('Analysing with AI...');
+  FAQ_aiSetLoadingMsg('Creating FAQ...');
   var userContent=[];
 
   if(fileData&&fileData.length){
@@ -3901,7 +3906,7 @@ function FAQ_aiParseAndShow(raw, originalUserContent){
   }
 
   // 5. Second turn — send raw response back and ask for clean JSON only
-  FAQ_aiSetLoadingMsg('Retrying for clean JSON...');
+  FAQ_aiSetLoadingMsg('Refining output...');
   var retryContent = [
     {type:'text', text:'Your previous response was:\n\n'+raw.substring(0,4000)+'\n\nNow output ONLY the JSON array. No explanation. No markdown. Start with [ end with ].'}
   ];
@@ -3987,7 +3992,7 @@ function FAQ_aiConfirm(){
 function FAQ_aiRetry(){
   FAQ_AI_pending=null;
   document.getElementById('faq-ai-preview').style.display='none';
-  FAQ_aiShowLoading('Re-analysing...');
+  FAQ_aiShowLoading('Creating FAQ...');
   if(FAQ_AI_mode==='url'){
     FAQ_aiCallClaude(null,FAQ_AI_urlList);
   } else {
@@ -4141,6 +4146,78 @@ function FAQ_initDeepLinks(){
 }
 
 
+/* ===== FAQ MOVE TO ===== */
+function FAQ_moveTopicToPrompt(sid, tid){
+  var topic = FAQ_findTopic(tid);
+  if(!topic) return;
+  // Build list of available sections (excluding current)
+  var options = FAQ_DATA.map(function(sec, i){
+    return {id: sec.id, label: (i+1)+'. '+(sec.title||'(untitled section)')}; 
+  }).filter(function(o){ return o.id !== sid; });
+  if(!options.length){ alert('No other sections to move this topic to.'); return; }
+
+  var choice = prompt(
+    'Move topic "'+topic.title+'" to which section?\n\n'+
+    options.map(function(o){ return o.label; }).join('\n')+'\n\nEnter a number:'
+  );
+  if(!choice) return;
+  var n = parseInt(choice) - 1;
+  var allSections = FAQ_DATA.filter(function(s){ return s.id !== sid; });
+  if(isNaN(n) || n < 0 || n >= allSections.length){ alert('Invalid selection.'); return; }
+  var targetSec = allSections[n];
+
+  // Remove from current section
+  var srcSec = FAQ_findSection(sid);
+  if(!srcSec) return;
+  srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== tid; });
+
+  // Add to target section
+  if(!targetSec.topics) targetSec.topics = [];
+  targetSec.topics.push(topic);
+
+  FAQ_save(); FAQ_renderEditor();
+  showToast('Topic moved to "'+targetSec.title+'" ✓');
+}
+
+function FAQ_moveSubtopicToPrompt(sid, tid, stid){
+  var st = FAQ_findSubtopic(tid, stid);
+  if(!st) return;
+  // Build list of all available topics across all sections
+  var options = [];
+  FAQ_DATA.forEach(function(sec, si){
+    (sec.topics||[]).forEach(function(t, ti){
+      if(t.id !== tid){
+        options.push({secId:sec.id, topicId:t.id,
+          label:(options.length+1)+'. ['+( sec.title||'Section')+'] '+( t.title||'(untitled topic)')});
+      }
+    });
+  });
+  if(!options.length){ alert('No other topics to move this subtopic to.'); return; }
+
+  var choice = prompt(
+    'Move subtopic "'+st.title+'" to which topic?\n\n'+
+    options.map(function(o){ return o.label; }).join('\n')+'\n\nEnter a number:'
+  );
+  if(!choice) return;
+  var n = parseInt(choice) - 1;
+  if(isNaN(n) || n < 0 || n >= options.length){ alert('Invalid selection.'); return; }
+  var target = options[n];
+  var targetTopic = FAQ_findTopic(target.topicId);
+  if(!targetTopic) return;
+
+  // Remove from current topic
+  var srcTopic = FAQ_findTopic(tid);
+  if(!srcTopic) return;
+  srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== stid; });
+
+  // Add to target topic
+  if(!targetTopic.subtopics) targetTopic.subtopics = [];
+  targetTopic.subtopics.push(st);
+
+  FAQ_save(); FAQ_renderEditor();
+  showToast('Subtopic moved ✓');
+}
+
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
@@ -4148,400 +4225,5 @@ loadData();
 FAQ_load();
 FAQ_loadApiKey();
 FAQ_initDeepLinks();</script>
-<script>
-/* ===== EVL: Employment Verification Letter (additive, self-contained) ===== */
-var EVL_jobRows = [], EVL_timeRows = [], EVL_periods = [], EVL_employeeName = '';
-
-function EVL_init(){
-  var jf = document.getElementById('evl-job-file');
-  var tf = document.getElementById('evl-time-file');
-  var jz = document.getElementById('evl-job-drop-zone');
-  var tz = document.getElementById('evl-time-drop-zone');
-  if(jf && !jf.dataset.bound){
-    jf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'job'); });
-    jf.dataset.bound = '1';
-  }
-  if(tf && !tf.dataset.bound){
-    tf.addEventListener('change', function(e){ EVL_parseFile(e.target.files[0], 'time'); });
-    tf.dataset.bound = '1';
-  }
-  if(jz && !jz.dataset.boundDrop){
-    EVL_bindDropZone(jz, 'job');
-  }
-  if(tz && !tz.dataset.boundDrop){
-    EVL_bindDropZone(tz, 'time');
-  }
-}
-
-function EVL_bindDropZone(zone, kind){
-  zone.addEventListener('dragenter', EVL_handleDragOver);
-  zone.addEventListener('dragover', EVL_handleDragOver);
-  zone.addEventListener('dragleave', EVL_handleDragLeave);
-  zone.addEventListener('drop', function(e){ EVL_handleDrop(e, kind); });
-  zone.dataset.boundDrop = '1';
-}
-
-function EVL_handleDragOver(e){
-  e.preventDefault();
-  e.currentTarget.classList.add('drag-over');
-}
-
-function EVL_handleDragLeave(e){
-  var nextTarget = e.relatedTarget;
-  if(nextTarget && e.currentTarget.contains(nextTarget)) return;
-  e.currentTarget.classList.remove('drag-over');
-}
-
-function EVL_handleDrop(e, kind){
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
-  var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if(!file) return;
-
-  var errEl = document.getElementById('evl-error');
-  if(!EVL_isValidXlsxFile(file)){
-    if(errEl) errEl.textContent = 'Please drop an .xlsx file.';
-    return;
-  }
-  if(errEl) errEl.textContent = '';
-  EVL_parseFile(file, kind);
-}
-
-function EVL_isValidXlsxFile(file){
-  if(!file) return false;
-  var mime = file.type || '';
-  return /\.xlsx$/i.test(file.name || '') || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-}
-
-function EVL_parseFile(file, kind){
-  if(!file) return;
-  var errEl = document.getElementById('evl-error');
-  if(errEl) errEl.textContent = '';
-  if(typeof XLSX === 'undefined'){
-    if(errEl) errEl.textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
-    return;
-  }
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var rows;
-    try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-      if(!wb.SheetNames || !wb.SheetNames.length) throw new Error('Spreadsheet contains no worksheets');
-      var ws = wb.Sheets[wb.SheetNames[0]];
-      // Recompute !ref from actual cell keys so that last row(s) are never missed
-      // when the file's internal range metadata is inaccurate.
-      var cellKeys = Object.keys(ws).filter(function(k){ return k[0] !== '!'; });
-      if(cellKeys.length){
-        var minR=Infinity,maxR=-Infinity,minC=Infinity,maxC=-Infinity;
-        cellKeys.forEach(function(k){
-          var c=XLSX.utils.decode_cell(k);
-          if(c.r<minR)minR=c.r; if(c.r>maxR)maxR=c.r;
-          if(c.c<minC)minC=c.c; if(c.c>maxC)maxC=c.c;
-        });
-        ws['!ref']=XLSX.utils.encode_range({s:{r:minR,c:minC},e:{r:maxR,c:maxC}});
-      }
-      rows = XLSX.utils.sheet_to_json(ws, {range:1, defval:null});
-    } catch(parseErr){
-      console.warn('Unable to parse EVL spreadsheet file (' + kind + '):', file && file.name, parseErr);
-      if(errEl) errEl.textContent = 'Could not read this spreadsheet. Please ensure you are uploading a valid .xlsx export file.';
-      return;
-    }
-    if(kind === 'job'){
-      EVL_jobRows = rows;
-      document.getElementById('evl-job-status').textContent = rows.length + ' rows loaded';
-    } else {
-      EVL_timeRows = rows;
-      document.getElementById('evl-time-status').textContent = rows.length + ' rows loaded';
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function EVL_fmtDate(d){
-  if(!(d instanceof Date) || isNaN(d)) return '';
-  var mm = String(d.getMonth()+1).padStart(2,'0');
-  var dd = String(d.getDate()).padStart(2,'0');
-  return mm + '/' + dd + '/' + d.getFullYear();
-}
-function EVL_fmtDateProse(d){
-  if(!(d instanceof Date) || isNaN(d)) return '';
-  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
-}
-function EVL_fmtMoney(amount, freq){
-  freq = (freq || '').trim();
-  var amt = Number(amount).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-  if(freq === 'Default NA Hourly') return '$' + amt + ' per hour';
-  if(freq.indexOf('Semester') === 0) return '$' + amt + ' per semester';
-  return '$' + amt + ' per ' + freq + ' (CONFIRM PAY PERIOD LABEL)';
-}
-function EVL_dateKey(d){ return (d instanceof Date) ? d.getTime() : String(d); }
-
-function EVL_buildPeriods(emplId){
-  var rows = EVL_jobRows.filter(function(r){ return String(r['Empl ID']) === String(emplId); });
-  if(!rows.length) throw new Error('No rows found for Empl ID ' + emplId + ' in the job summary file.');
-  EVL_employeeName = (rows[0]['First Name'] || '') + ' ' + (rows[0]['Last'] || '');
-  EVL_employeeName = EVL_employeeName.trim();
-
-  var groups = {};
-  rows.forEach(function(r){
-    var key = r['Empl Record'] + '_' + EVL_dateKey(r['Last Start']);
-    (groups[key] = groups[key] || []).push(r);
-  });
-
-  var periods = [];
-  Object.keys(groups).forEach(function(k){
-    var grp = groups[k];
-    var hire = grp.find(function(r){ return r['Action'] === 'Hire' || r['Action'] === 'Rehire'; });
-    var term = grp.find(function(r){ return r['Action'] === 'Termination'; });
-    if(!hire) return;
-    if(term && term['Reason'] === 'Appointment Cancelled') return;
-
-    var emplType = hire['Empl Type'];
-    var startDate = hire['Last Start'];
-    var endDate = null;
-    if(emplType === 'Hourly'){
-      endDate = term ? term['Eff Date'] : null;
-    } else {
-      endDate = (term && term['Term Date']) ? term['Term Date'] : hire['Expected End Date'];
-    }
-
-    periods.push({
-      emplRecord: hire['Empl Record'],
-      position: hire['Business Title'],
-      noc: hire['NOC'],
-      faculty: hire['Faculty/Unit'],
-      department: hire['Department'],
-      employmentStatus: hire['Full/Part'],
-      emplType: emplType,
-      hoursPerWeek: hire['Stnd Hrs/Wk'],
-      startDate: startDate,
-      endDate: endDate,
-      compRate: hire['Current Comp Rate'],
-      compFreq: hire['Comp Freq']
-    });
-  });
-
-  periods.sort(function(a,b){ return new Date(a.startDate) - new Date(b.startDate); });
-  return periods;
-}
-
-function EVL_totalHours(emplRecord, startDate, endDate){
-  var total = 0;
-  EVL_timeRows.forEach(function(r){
-    if(r['Empl Record'] !== emplRecord) return;
-    var d = r['Rpt Dt'];
-    if(!(d instanceof Date)) return;
-    if(d < startDate) return;
-    if(endDate && d > endDate) return;
-    total += Number(r['# of Hours']) || 0;
-  });
-  return total;
-}
-
-function EVL_buildPreview(){
-  var errEl = document.getElementById('evl-error');
-  errEl.textContent = '';
-  try {
-    var emplId = document.getElementById('evl-empl-id').value.trim();
-    if(!emplId) throw new Error('Enter an Employee ID.');
-    if(!EVL_jobRows.length) throw new Error('Upload the job summary file first.');
-
-    EVL_periods = EVL_buildPeriods(emplId);
-
-    var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
-    if(hasHourly && !EVL_timeRows.length){
-      throw new Error('This employee has hourly position(s). Please also upload the time report file.');
-    }
-
-    EVL_periods.forEach(function(p){
-      if(p.emplType === 'Hourly'){
-        p.hoursWorked = EVL_totalHours(p.emplRecord, p.startDate, p.endDate);
-      }
-    });
-
-    var tbody = document.querySelector('#evl-preview-table tbody');
-    tbody.innerHTML = '';
-    EVL_periods.forEach(function(p){
-      var tr = document.createElement('tr');
-      var hoursCell = (p.emplType === 'Hourly') ? '***' : Number(p.hoursPerWeek).toFixed(2);
-      var benefitCell = '';
-      if(String(p.position).toLowerCase().indexOf('grad') !== -1){
-        benefitCell = '**';
-      } else if(String(p.position).toLowerCase().indexOf('professor') !== -1 || String(p.position).toLowerCase().indexOf('postdoctoral') !== -1){
-        benefitCell = '*';
-      } else if(p.emplType === 'Hourly'){
-        benefitCell = 'No';
-      }
-      var vals = [
-        p.position, p.noc, p.faculty, p.department, p.employmentStatus,
-        hoursCell, EVL_fmtDate(p.startDate), EVL_fmtDate(p.endDate),
-        EVL_fmtMoney(p.compRate, p.compFreq), benefitCell
-      ];
-      vals.forEach(function(v){
-        var td = document.createElement('td');
-        td.style.border = '1px solid #ccc';
-        td.style.padding = '6px';
-        td.contentEditable = 'true';
-        td.textContent = v;
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-
-    document.getElementById('evl-preview-wrap').style.display = 'block';
-  } catch(err){
-    errEl.textContent = err.message;
-  }
-}
-
-function EVL_base64ToUint8Array(base64){
-  var binary = atob(base64);
-  var bytes = new Uint8Array(binary.length);
-  for(var i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-async function EVL_generateDocx(){
-  var errEl = document.getElementById('evl-error');
-  errEl.textContent = '';
-  if(typeof docx === 'undefined'){
-    errEl.textContent = 'The document library failed to load. Check your internet connection and reload the page.';
-    return;
-  }
-  var D = docx;
-
-  var rows = Array.from(document.querySelectorAll('#evl-preview-table tbody tr')).map(function(tr){
-    return Array.from(tr.children).map(function(td){ return td.textContent; });
-  });
-
-  var hasHourly = EVL_periods.some(function(p){ return p.emplType === 'Hourly'; });
-  var hasGradNote = EVL_periods.some(function(p){
-    var bp = p.benProgram || '';
-    return bp === 'N/A' || (bp === '' && String(p.position).toLowerCase().indexOf('grad') !== -1);
-  });
-  var hasProfessorNote = EVL_periods.some(function(p){
-    var bp = p.benProgram || '';
-    return bp === 'TRU' || bp === 'SUP' ||
-      (bp === '' && (String(p.position).toLowerCase().indexOf('professor') !== -1 ||
-       String(p.position).toLowerCase().indexOf('postdoctoral') !== -1));
-  });
-
-  var headerLabels = ['Position','NOC','Faculty','Department','Employment Status','Standard Hours of Work per Week','Employment Start Date','Employment End Date','Salary','Group Employer Benefit Plan* Eligibility'];
-  var colWidths = [1500,700,1300,1200,900,1000,1000,1000,1000,1200];
-
-  function cell(text, bold){
-    return new D.TableCell({
-      verticalAlign: D.VerticalAlign.CENTER,
-      children:[new D.Paragraph({alignment: D.AlignmentType.CENTER, children:[new D.TextRun({text:String(text), bold: !!bold})]})]
-    });
-  }
-
-  var tableRows = [new D.TableRow({children: headerLabels.map(function(h){ return cell(h, true); }), tableHeader:true})];
-  rows.forEach(function(r){
-    tableRows.push(new D.TableRow({children: r.map(function(v){ return cell(v); })}));
-  });
-
-  var table = new D.Table({
-    columnWidths: colWidths,
-    width:{size: colWidths.reduce(function(a,b){return a+b;},0), type: D.WidthType.DXA},
-    rows: tableRows
-  });
-
-  var children = [
-    new D.Paragraph({children:[new D.TextRun({text:'PERSONAL AND CONFIDENTIAL', bold:true})]}),
-    new D.Paragraph({text:''}),
-    new D.Paragraph({alignment: D.AlignmentType.RIGHT, children:[new D.TextRun({text: EVL_fmtDateProse(new Date())})]}),
-    new D.Paragraph({text:''}),
-    new D.Paragraph({text:'To Whom It May Concern,'}),
-    new D.Paragraph({text:''}),
-    new D.Paragraph({alignment: D.AlignmentType.CENTER, children:[new D.TextRun({text:'Re: '}), new D.TextRun({text: EVL_employeeName, bold:true})]}),
-    new D.Paragraph({text:''}),
-    new D.Paragraph({children:[
-      new D.TextRun('This letter is to confirm the employment history, standard hours of work and benefits of '),
-      new D.TextRun({text: EVL_employeeName, bold:true}),
-      new D.TextRun(' for immigration purposes.')
-    ]}),
-    new D.Paragraph({text:''}),
-    table,
-    new D.Paragraph({text:''})
-  ];
-
-  if(hasProfessorNote){
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.', italics:true})]}));
-    children.push(new D.Paragraph({text:''}));
-  }
-
-  if(hasGradNote){
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics:true})]}));
-    children.push(new D.Paragraph({text:''}));
-  }
-
-  if(hasHourly){
-    var notes = [];
-    EVL_periods.filter(function(p){ return p.emplType === 'Hourly'; }).forEach(function(p){
-      if(p.endDate){
-        notes.push('For the period of ' + EVL_fmtDateProse(p.startDate) + ' to ' + EVL_fmtDateProse(p.endDate) + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + (Math.round(p.hoursWorked*100)/100) + '.');
-      } else {
-        notes.push('Since ' + EVL_fmtDateProse(p.startDate) + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + (Math.round(p.hoursWorked*100)/100) + '.');
-      }
-    });
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'*** This is an hourly position under which, no minimum number of working hours are set. ' + notes.join(' '), italics:true})]}));
-    children.push(new D.Paragraph({text:''}));
-  }
-
-  children.push(new D.Paragraph({text:'Sincerely,'}));
-  children.push(new D.Paragraph({text:''}));
-  children.push(new D.Paragraph({text:'Immigration Services'}));
-  children.push(new D.Paragraph({text:'hrimmigration@ucalgary.ca'}));
-  children.push(new D.Paragraph({text:'University of Calgary'}));
-
-  var logoImg = document.querySelector('.nav-logo');
-  var headerChildren = [];
-  try {
-    if(logoImg && logoImg.src.indexOf('base64,') !== -1){
-      var base64 = logoImg.src.split('base64,')[1];
-      var imgBytes = EVL_base64ToUint8Array(base64);
-      var headerTable = new D.Table({
-        columnWidths:[2700,8100],
-        width:{size:10800, type:D.WidthType.DXA},
-        borders:{top:{style:D.BorderStyle.NONE},bottom:{style:D.BorderStyle.NONE},left:{style:D.BorderStyle.NONE},right:{style:D.BorderStyle.NONE},insideHorizontal:{style:D.BorderStyle.NONE},insideVertical:{style:D.BorderStyle.NONE}},
-        rows:[new D.TableRow({children:[
-          new D.TableCell({children:[new D.Paragraph({children:[new D.ImageRun({data:imgBytes, transformation:{width:170,height:69}, type:'jpg'})]})]}),
-          new D.TableCell({children:[
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun({text:'People & Culture', bold:true, size:28})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('2500 University Drive NW')]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('Calgary, AB Canada T2N 1N4')]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun('hrimmigration@ucalgary.ca')]})
-          ]})
-        ]})]
-      });
-      headerChildren = [headerTable, new D.Paragraph({text:''})];
-    }
-  } catch(imgErr){ /* if the logo can't be embedded, proceed without it */ }
-
-  var doc = new D.Document({
-    styles:{default:{document:{run:{font:'Calibri', size:22}}}},
-    sections:[{
-      properties:{page:{size:{width:12240,height:15840}, margin:{top:720,bottom:720,left:720,right:720}}},
-      children: headerChildren.concat(children)
-    }]
-  });
-
-  try {
-    var blob = await D.Packer.toBlob(doc);
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'Employment Verification Letter - ' + EVL_employeeName + '.docx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch(genErr){
-    errEl.textContent = 'Could not generate the document: ' + genErr.message;
-  }
-}
-</script>
 </body>
 </html>
