@@ -3768,34 +3768,42 @@ function FAQ_aiGetSystemPrompt(){
 /* ── Call Claude API ── */
 function FAQ_aiCallClaude(fileData, urls){
   FAQ_aiSetLoadingMsg('Analysing with AI...');
-
-  var systemPrompt='You are an expert at converting HR documentation into structured FAQ content for a university immigration services team. Analyse all provided content thoroughly and return ONLY a valid JSON array with no explanation, no markdown fences. The JSON must follow this exact schema: [{"title":"Section title","topics":[{"title":"Topic title","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}]}]}]}] Rules: - answers must be valid HTML using p ul li ol table strong em etc. - Preserve ALL information - never summarise or omit. - Use tables for comparative or tabular data. - Group related content into logical subtopics. - If multiple files or URLs are provided, combine them logically into sections. - Return ONLY the JSON array, nothing else';
-
-    var userContent=[];
+  var userContent=[];
 
   if(fileData&&fileData.length){
     fileData.forEach(function(f){
       if(f.apiType==='text'){
         userContent.push({type:'text',text:'=== FILE: '+f.name+' ===\n\n'+f.content});
       } else if(f.apiType==='pdf'){
-        // application/pdf is the only media_type Claude accepts for documents
         userContent.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:f.content}});
-        userContent.push({type:'text',text:'(Document above: '+f.name+(f.originalMime?' [original format: '+f.originalMime+']':'')+')'});
+        userContent.push({type:'text',text:'(File: '+f.name+(f.originalMime?' originally '+f.originalMime:'')+' — read all content)'});
       } else if(f.apiType==='image'){
-        var safeImgMime=['image/jpeg','image/png','image/gif','image/webp'].indexOf(f.mime)>=0?f.mime:'image/png';
-        userContent.push({type:'image',source:{type:'base64',media_type:safeImgMime,data:f.content}});
-        userContent.push({type:'text',text:'(Image above: '+f.name+' — extract all visible text and tables)'});
+        var im=['image/jpeg','image/png','image/gif','image/webp'].indexOf(f.mime)>=0?f.mime:'image/png';
+        userContent.push({type:'image',source:{type:'base64',media_type:im,data:f.content}});
+        userContent.push({type:'text',text:'(Image: '+f.name+' — extract all visible text)'});
       }
     });
-    userContent.push({type:'text',text:'Convert ALL the above content into a structured FAQ JSON array. Return ONLY the JSON array with no explanation or markdown.'});
+    userContent.push({type:'text',text:'Convert the content above into a FAQ JSON array. Output ONLY the JSON, nothing else. Start your response with [ and end with ].'});
   } else if(urls&&urls.length){
-    var urlText=urls.map(function(u,i){return (i+1)+'. '+u;}).join('\n');
-    userContent.push({type:'text',text:'Please visit and read the content from these URLs, then convert everything into a structured FAQ JSON array:\n\n'+urlText+'\n\nReturn ONLY the JSON array.'});
+    userContent.push({type:'text',text:'Convert this content into a FAQ JSON array. Output ONLY the JSON, nothing else. Start with [ and end with ].\n\n'+urls.join('\n')});
   }
 
+  FAQ_aiDoApiCall(
+    userContent,
+    'You convert documents into structured FAQ JSON for a university HR immigration team. You ALWAYS respond with ONLY a valid JSON array — no explanation, no markdown, no code fences. The array starts with [ and ends with ]. Each element: {"title":"Section","topics":[{"title":"Topic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML answer</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}]}]}]}. Use HTML in answers (p, ul, li, table, strong). Preserve ALL details.',
+    function(raw){ FAQ_aiParseAndShow(raw, userContent); }
+  );
+}
+
+function FAQ_aiDoApiCall(userContent, systemPrompt, onSuccess){
   fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':FAQ_getApiKey(),'anthropic-dangerous-direct-browser-access':'true','anthropic-version':'2023-06-01'},
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':FAQ_getApiKey(),
+      'anthropic-dangerous-direct-browser-access':'true',
+      'anthropic-version':'2023-06-01'
+    },
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:8000,
@@ -3804,32 +3812,13 @@ function FAQ_aiCallClaude(fileData, urls){
     })
   })
   .then(function(r){
-    if(!r.ok)return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,200));});
+    if(!r.ok) return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,300));});
     return r.json();
   })
   .then(function(data){
     var text=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-    // Strip all variants of markdown code fences
-    text=text.replace(/^```+(?:json)?\s*/i,'').replace(/\s*```+\s*$/,'').trim();
-    // Strip any leading/trailing whitespace or newlines again
-    text=text.trim();
-    // Handle single object wrapped in {} instead of []
-    if(text.charAt(0)==='{') text='['+text+']';
-    // Find first [ in case there's preamble text before the JSON
-    var firstBracket=text.indexOf('[');
-    var lastBracket=text.lastIndexOf(']');
-    if(firstBracket>0&&lastBracket>firstBracket) text=text.substring(firstBracket,lastBracket+1);
-    var parsed;
-    try{parsed=JSON.parse(text);}
-    catch(jsonErr){
-      // Last resort: try to extract JSON array with regex
-      var match=text.match(/\[[\s\S]*\]/);
-      if(match){try{parsed=JSON.parse(match[0]);}catch(e2){throw new Error('Could not parse response as JSON. Response started with: '+text.substring(0,100));}}
-      else{throw new Error('No JSON array found in response. Response started with: '+text.substring(0,100));}
-    }
-    if(!Array.isArray(parsed))throw new Error('Response was not a JSON array');
-    FAQ_AI_pending=FAQ_aiInjectIds(parsed);
-    FAQ_aiShowPreview(FAQ_AI_pending);
+    if(!text) throw new Error('Empty response from API');
+    onSuccess(text);
   })
   .catch(function(err){
     FAQ_aiHideLoading();
@@ -3837,6 +3826,64 @@ function FAQ_aiCallClaude(fileData, urls){
     document.getElementById('faq-ai-input-panel').style.display='block';
   });
 }
+
+function FAQ_aiParseAndShow(raw, originalUserContent){
+  var text = raw.trim();
+
+  // 1. Strip ALL markdown fences (```json ... ``` or ``` ... ```)
+  text = text.replace(/^```+(?:json)?\s*/i,'').replace(/\s*```+\s*$/,'').trim();
+
+  // 2. Find outermost [ ... ]
+  var s = text.indexOf('['), e = text.lastIndexOf(']');
+  if(s >= 0 && e > s){ text = text.substring(s, e+1); }
+  else {
+    // Try { ... } and wrap
+    var os = text.indexOf('{'), oe = text.lastIndexOf('}');
+    if(os >= 0 && oe > os){ text = '[' + text.substring(os, oe+1) + ']'; }
+  }
+
+  // 3. Parse
+  var parsed = null;
+  try{ parsed = JSON.parse(text); }
+  catch(e1){
+    // 4. Fix trailing commas and retry
+    try{ parsed = JSON.parse(text.replace(/,(\s*[}\]])/g,'$1')); }
+    catch(e2){ parsed = null; }
+  }
+
+  if(parsed && Array.isArray(parsed) && parsed.length > 0){
+    FAQ_AI_pending = FAQ_aiInjectIds(parsed);
+    FAQ_aiShowPreview(FAQ_AI_pending);
+    return;
+  }
+
+  // 5. Second turn — send raw response back and ask for clean JSON only
+  FAQ_aiSetLoadingMsg('Retrying for clean JSON...');
+  var retryContent = [
+    {type:'text', text:'Your previous response was:\n\n'+raw.substring(0,4000)+'\n\nNow output ONLY the JSON array. No explanation. No markdown. Start with [ end with ].'}
+  ];
+  FAQ_aiDoApiCall(
+    retryContent,
+    'Output ONLY a valid JSON array starting with [ and ending with ]. No other text.',
+    function(raw2){
+      var t2 = raw2.trim().replace(/^```+(?:json)?\s*/i,'').replace(/\s*```+\s*$/,'').trim();
+      var s2 = t2.indexOf('['), e2 = t2.lastIndexOf(']');
+      if(s2 >= 0 && e2 > s2){ t2 = t2.substring(s2, e2+1); }
+      try{
+        var p2 = JSON.parse(t2);
+        if(Array.isArray(p2) && p2.length > 0){
+          FAQ_AI_pending = FAQ_aiInjectIds(p2);
+          FAQ_aiShowPreview(FAQ_AI_pending);
+          return;
+        }
+      }catch(e){}
+      FAQ_aiHideLoading();
+      FAQ_aiShowError('Could not generate valid FAQ from this document. Try copying the text and pasting it as a .txt file instead.');
+      document.getElementById('faq-ai-input-panel').style.display='block';
+    }
+  );
+}
+
 
 function FAQ_aiInjectIds(sections){
   return sections.map(function(sec){
