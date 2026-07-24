@@ -3595,12 +3595,49 @@ function FAQ_aiScrapeUrls(){
   FAQ_AI_urlList=raw.split(/[\n\r]+/).map(function(u){return u.trim();}).filter(function(u){return u.length>0;});
   FAQ_AI_mode='url';
   FAQ_aiHideInput();
-  FAQ_aiSetStatus('Scraping <strong>'+FAQ_AI_urlList.length+' URL(s)</strong>...','show');
-  FAQ_aiShowLoading('Fetching pages...');
+  FAQ_aiSetStatus('Fetching <strong>'+FAQ_AI_urlList.length+' URL(s)</strong>...','show');
+  FAQ_aiShowLoading('Fetching page 1 of '+FAQ_AI_urlList.length+'...');
 
-  // Use Claude with web search / direct URL content via fetch proxy
-  // We'll ask Claude to work from the URLs directly
-  FAQ_aiCallClaude(null, FAQ_AI_urlList);
+  // Fetch each URL via CORS proxy, extract text, then send to Claude
+  var fetched=[];
+  var remaining=FAQ_AI_urlList.length;
+  FAQ_AI_urlList.forEach(function(url,i){
+    FAQ_aiSetLoadingMsg('Fetching page '+(i+1)+' of '+FAQ_AI_urlList.length+'...');
+    // Try allorigins.win CORS proxy
+    var proxyUrl='https://api.allorigins.win/get?url='+encodeURIComponent(url);
+    fetch(proxyUrl)
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(data){
+        var html=data.contents||'';
+        // Strip HTML tags to get plain text
+        var tmp=document.createElement('div');
+        tmp.innerHTML=html;
+        // Remove scripts and styles
+        tmp.querySelectorAll('script,style,nav,footer,header').forEach(function(el){el.remove();});
+        var text=tmp.innerText||tmp.textContent||'';
+        // Clean up whitespace
+        text=text.replace(/[ \t]*[\n\r]{2,}[ \t]*/g,'\n\n').trim();
+        fetched.push({url:url,text:text.substring(0,15000)});
+      })
+      .catch(function(err){
+        fetched.push({url:url,text:'[Failed to fetch: '+err.message+']'});
+      })
+      .finally(function(){
+        remaining--;
+        if(remaining===0){
+          FAQ_aiSetLoadingMsg('Analysing with AI...');
+          FAQ_aiCallClaudeFromText(fetched);
+        }
+      });
+  });
+}
+
+function FAQ_aiCallClaudeFromText(pages){
+  var combined=pages.map(function(p){
+    return 'SOURCE: '+p.url+'\n\n'+p.text;
+  }).join('\n\n---\n\n');
+  // Call Claude with the extracted text as a file
+  FAQ_aiCallClaude([{name:'web-content.txt',type:'text',content:combined}],null);
 }
 
 /* ── Call Claude API ── */
@@ -3629,7 +3666,7 @@ function FAQ_aiCallClaude(fileData, urls){
 
   fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:8000,
@@ -3643,7 +3680,7 @@ function FAQ_aiCallClaude(fileData, urls){
   })
   .then(function(data){
     var text=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-    text=text.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+        text=text.replace(/[ \t]*[\n\r]{2,}[ \t]*/g,'\n\n').trim();
     // Handle wrapped object
     if(text.charAt(0)==='{') text='['+text+']';
     var parsed=JSON.parse(text);
