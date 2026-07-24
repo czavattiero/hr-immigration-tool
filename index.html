@@ -989,8 +989,10 @@ var DEFAULT_DATA=[
     {label:'Postdoctoral Associate',output:'<p>Immigration category: <strong>Postdoctoral Associate</strong> &mdash; International Mobility Program (IMP). LMIA-exempt.</p>',docs:[]},
     {label:'Research Chair',output:'<p>Immigration category: <strong>Research Chair</strong> &mdash; International Mobility Program (IMP). LMIA-exempt under significant benefit exemption.</p>',docs:[]},
     {label:'Intracompany Transfer',output:'<p>Immigration category: <strong>Intracompany Transfer</strong> &mdash; transferred within a multinational company.</p>',docs:[]},
-    {label:'LMIA-based Work Permit',output:'<p>Immigration category: <strong>LMIA-based Work Permit</strong> &mdash; positive LMIA obtained. Please attach LMIA confirmation letter.</p>',docs:[]}
+    {label:'LMIA-based Work Permit',output:'<p>Immigration category: <strong>LMIA-based Work Permit</strong> &mdash; positive LMIA obtained. Please attach LMIA confirmation letter.</p>',docs:[]},
+    {label:'Francophone Mobility Program',output:'<p>Immigration category: <strong>Francophone Mobility Program</strong> &mdash; LMIA-exempt under the Francophone Mobility stream. Position title: [position title].</p>',docs:[]}
   ]},
+  {id:'s_pt',type:'freetext',label:'Position title',question:"What is the position title?"},
   {id:'s2',type:'dynamic',label:'Work permit status',question:"What is the client's current work permit status?",options:[
     {label:'New application',output:'<p>Status: <strong>New work permit application</strong>. All required documents must be compiled before submission.</p>',docs:[]},
     {label:'Extension required',output:'<p>Status: <strong>Work permit extension</strong> required. Submit at least 30 days before current permit expires.</p>',docs:[]},
@@ -1223,7 +1225,7 @@ function renderIntake(){
     } else if(s.type==='freetext'){
       var textVal=answers[s.id]||'';
       var taCls='q-free-input'+(String(textVal).trim()!==''?' selected':'');
-      if(isResearchAwardNameSection(s)){
+      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)){
         card.innerHTML='<div class="q-num">Question '+(idx+1)+' of '+visible.length+'</div>'
           +'<div class="q-text">'+esc(s.question)+'</div>'
           +'<input type="text" class="'+taCls+'" data-sid="'+escA(s.id)+'" data-type="freetext" placeholder="Type your response..." value="'+escA(textVal)+'">';
@@ -1329,12 +1331,12 @@ function renderOutput(){
   var segs=[],docs=[];
   DATA.forEach(function(s){
     if(s.type==='fixed'){
-      var fixedHtml=replaceResearchAwardNamePlaceholder(s.text,true);
+      var fixedHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true);
       if(fixedHtml&&htmlToText(fixedHtml)) segs.push({label:s.label,html:fixedHtml,type:'fixed'});
     } else if(s.type==='dynamic'){
       var i=answers[s.id]; if(i==null) return;
       var opt=s.options[i]; if(!opt) return;
-      var dynamicHtml=replaceResearchAwardNamePlaceholder(opt.output,true);
+      var dynamicHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(opt.output,true),true);
       if(dynamicHtml&&htmlToText(dynamicHtml)) segs.push({label:s.label,html:dynamicHtml,type:'dynamic'});
     } else if(s.type==='grouped'){
       /* Each dropdown in this section has its own output */
@@ -1343,11 +1345,11 @@ function renderOutput(){
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var outHtml=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);
+        var outHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     } else if(s.type==='freetext'){
-      if(isResearchAwardNameSection(s)) return;
+      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)) return;
       var ftHtml=buildFreeTextOutputHtml(s,answers[s.id]);
       if(ftHtml&&htmlToText(ftHtml)) segs.push({label:s.label,html:ftHtml,type:'freetext'});
     }
@@ -1394,10 +1396,10 @@ function copyOutputText(){
 function collectSelectedOutputHtmlParts(){
   var parts=[];
   DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(replaceResearchAwardNamePlaceholder(s.text,true));}
-    else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(replaceResearchAwardNamePlaceholder(o.output,true));}}
-    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);if(h) parts.push(h);});}
-    else if(s.type==='freetext'){if(!isResearchAwardNameSection(s)){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}}
+    if(s.type==='fixed'){if(s.text) parts.push(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true));}
+    else if(s.type==='dynamic'){var i=answers[s.id];if(i!=null){var o=s.options[i];if(o&&o.output) parts.push(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(o.output,true),true));}}
+    else if(s.type==='grouped'){(s.dropdowns||[]).forEach(function(gd,gdi){var key=s.id+'__'+gdi;var cn=answers[key];if(!cn)return;var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});var h=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true);if(h) parts.push(h);});}
+    else if(s.type==='freetext'){if(!isResearchAwardNameSection(s)&&!isPositionTitleSection(s)){var h2=buildFreeTextOutputHtml(s,answers[s.id]);if(h2) parts.push(h2);}}
   });
   return parts;
 }
@@ -1607,9 +1609,23 @@ function replaceCountryOfCitizenshipPlaceholder(content,countryName,escapeForHtm
   var replacement=escapeForHtml?esc(normalizedCountry):normalizedCountry;
   return text.replace(/\[country of citizenship\]/gi,replacement);
 }
+var POSITION_TITLE_QUESTION_NORMALIZED=normalizeQuestionText("What is the position title?");
+function isPositionTitleSection(s){
+  if(s.type!=='freetext') return false;
+  var q=normalizeQuestionText(s.question);
+  return q===POSITION_TITLE_QUESTION_NORMALIZED
+    || (q.indexOf('position title')!==-1);
+}
+function replacePositionTitlePlaceholder(content,escapeForHtml){
+  var text=String(content||'');
+  var positionTitle=getFreeTextAnswerByQuestion("What is the position title?");
+  if(!positionTitle) return text;
+  var replacement=escapeForHtml?esc(positionTitle):positionTitle;
+  return text.replace(/\[position title\]/gi,replacement);
+}
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
-  var bodyHtml=replaceApplicantNamePlaceholder(replaceResearchAwardNamePlaceholder(buildEmailHtmlFromParts(htmlParts),true),applicantName,true);
+  var bodyHtml=replaceApplicantNamePlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(buildEmailHtmlFromParts(htmlParts),true),true),applicantName,true);
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
   sections.push(bodyHtml);
   return sections.join('');
@@ -1617,7 +1633,7 @@ function buildDigestEmailHtml(htmlParts,docs,applicantName){
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
   var combinedText=(parts||[]).join('\n\n');
-  var bodyText=replaceApplicantNamePlaceholder(replaceResearchAwardNamePlaceholder(combinedText,false),applicantName,false);
+  var bodyText=replaceApplicantNamePlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(combinedText,false),false),applicantName,false);
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(bodyText) sections.push(bodyText);
   return sections.join('\n\n');
@@ -1790,12 +1806,12 @@ function writePlainClipboard(text){
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(replaceResearchAwardNamePlaceholder(s.text,true)));}
+    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true)));}
     else if(s.type==='dynamic'){
       var i=answers[s.id];
       if(i!=null){
         var o=s.options[i];
-        if(o&&o.output) parts.push(htmlToText(replaceResearchAwardNamePlaceholder(o.output,true)));
+        if(o&&o.output) parts.push(htmlToText(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(o.output,true),true)));
       }
     } else if(s.type==='grouped'){
       (s.dropdowns||[]).forEach(function(gd,gdi){
@@ -1803,11 +1819,11 @@ function collectSelectedOutputTextParts(){
         var cn=answers[key];
         if(!cn) return;
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var t=replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true);
+        var t=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true);
         if(t) parts.push(htmlToText(t));
       });
     } else if(s.type==='freetext'){
-      if(isResearchAwardNameSection(s)) return;
+      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)) return;
       var t2=buildFreeTextOutputText(s,answers[s.id]);
       if(t2) parts.push(t2);
     }
