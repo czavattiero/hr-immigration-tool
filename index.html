@@ -776,7 +776,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="FAQ_exportBackup()">Export backup</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer">Import backup<input type="file" accept=".json" onchange="FAQ_importBackup(event)" style="display:none"></label>
-        <label class="btn btn-sm" style="cursor:pointer;background:var(--darkred);color:#fff;border:none">&#129302; Import from document<input type="file" accept=".pdf,.doc,.docx,.odt,.txt" onchange="FAQ_aiImport(event)" style="display:none"></label>
+        <label class="btn btn-sm" style="cursor:pointer;background:var(--darkred);color:#fff;border:none">&#129302; Import from document<input type="file" accept=".pdf,.doc,.docx,.odt,.txt,.ppt,.pptx,.xls,.xlsx,.csv,.rtf,.md,image/*" onchange="FAQ_aiImport(event)" style="display:none"></label>
       </div>
     </div>
     <div class="save-note" style="margin-bottom:16px">All FAQ changes save automatically to Supabase and sync to all editors within 10 seconds.</div>
@@ -786,26 +786,54 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 </div>
 
 <div class="modal-overlay hidden" id="faq-ai-modal" style="z-index:2000">
-  <div class="modal" style="max-width:560px;width:92%">
-    <div style="font-size:17px;font-weight:700;margin-bottom:12px">&#129302; AI Document Importer</div>
-    <div id="faq-ai-status" style="font-size:13.5px;color:var(--ink2);margin-bottom:12px"></div>
+  <div class="modal" style="max-width:600px;width:95%">
+    <div style="font-size:17px;font-weight:700;margin-bottom:14px">&#129302; AI FAQ Importer</div>
+
+    <!-- Input panel -->
+    <div id="faq-ai-input-panel">
+      <!-- Drop zone -->
+      <div id="faq-ai-dropzone" style="border:2px dashed var(--border2);border-radius:8px;padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px">
+        <div style="font-size:26px;margin-bottom:6px">&#128229;</div>
+        <div style="font-size:13.5px;font-weight:500;color:var(--ink);margin-bottom:4px">Drag &amp; drop files here</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">PDF, Word, PowerPoint, Excel, ODT, RTF, TXT, images and more</div>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer">Browse files
+          <input type="file" id="faq-ai-file-input" multiple
+            accept=".pdf,.doc,.docx,.odt,.ppt,.pptx,.xls,.xlsx,.csv,.rtf,.txt,.md,image/*"
+            onchange="FAQ_aiImport(event)" style="display:none">
+        </label>
+      </div>
+      <!-- URL input -->
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Or scrape from URL(s)</div>
+        <textarea id="faq-ai-urls" rows="3" placeholder="Paste one or more URLs (one per line)..."
+          style="width:100%;border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+        <button class="btn btn-sm" style="margin-top:6px;background:var(--darkred);color:#fff;border:none" onclick="FAQ_aiScrapeUrls()">&#127758; Scrape &amp; import</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-secondary btn-sm" onclick="FAQ_aiCancel()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Status / loading -->
+    <div id="faq-ai-status" style="font-size:13.5px;color:var(--ink2);margin-bottom:8px;display:none"></div>
+    <div id="faq-ai-loading" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:28px;animation:spin 1.2s linear infinite;display:inline-block">&#9696;</div>
+      <div style="margin-top:8px;font-size:13px;color:var(--ink3)" id="faq-ai-loading-msg">Processing...</div>
+    </div>
+
+    <!-- Preview -->
     <div id="faq-ai-preview" style="display:none">
-      <div style="font-size:13px;font-weight:600;margin-bottom:6px">Preview — review before adding to FAQ:</div>
-      <div id="faq-ai-preview-content" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:320px;overflow-y:auto;font-size:12.5px"></div>
-      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <div id="faq-ai-status-preview" style="font-size:13px;font-weight:600;margin-bottom:6px"></div>
+      <div id="faq-ai-preview-content" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:340px;overflow-y:auto;font-size:12.5px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="FAQ_aiConfirm()">&#10003; Add to FAQ</button>
         <button class="btn btn-secondary btn-sm" onclick="FAQ_aiRetry()">&#8635; Re-generate</button>
         <button class="btn btn-secondary btn-sm" onclick="FAQ_aiCancel()">Cancel</button>
       </div>
     </div>
-    <div id="faq-ai-loading" style="display:none;text-align:center;padding:20px 0">
-      <div style="font-size:28px;animation:spin 1.2s linear infinite;display:inline-block">&#9696;</div>
-      <div style="margin-top:8px;font-size:13px;color:var(--ink3)" id="faq-ai-loading-msg">Reading document...</div>
-    </div>
+
+    <!-- Error -->
     <div id="faq-ai-error" style="display:none;padding:10px 12px;background:#fdeaea;border:1px solid #e5b0b0;border-radius:6px;font-size:13px;color:#8b1a1a;margin-top:8px"></div>
-    <div id="faq-ai-buttons-initial" style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-secondary btn-sm" onclick="FAQ_aiCancel()">Cancel</button>
-    </div>
   </div>
 </div>
 
@@ -3474,92 +3502,122 @@ document.addEventListener('change',function(e){
 
 
 /* ===== FAQ AI DOCUMENT IMPORTER ===== */
-var FAQ_AI_pending  = null;   // parsed JSON from Claude
-var FAQ_AI_fileText = null;   // extracted text from file
-var FAQ_AI_fileObj  = null;   // original File object
+var FAQ_AI_pending   = null;
+var FAQ_AI_fileObjs  = [];   // multiple files supported
+var FAQ_AI_urlList   = [];
+var FAQ_AI_mode      = 'file'; // 'file' or 'url'
 
+/* ── Open modal from toolbar button ── */
+function FAQ_aiOpen(){
+  FAQ_AI_pending = null;FAQ_AI_fileObjs=[];FAQ_AI_urlList=[];
+  var modal=document.getElementById('faq-ai-modal');
+  modal.classList.remove('hidden');
+  document.getElementById('faq-ai-input-panel').style.display='block';
+  document.getElementById('faq-ai-preview').style.display='none';
+  document.getElementById('faq-ai-loading').style.display='none';
+  document.getElementById('faq-ai-error').style.display='none';
+  document.getElementById('faq-ai-status').style.display='none';
+  document.getElementById('faq-ai-urls').value='';
+  FAQ_aiInitDropZone();
+}
+
+function FAQ_aiInitDropZone(){
+  var zone=document.getElementById('faq-ai-dropzone');
+  if(!zone||zone._aiInit)return;
+  zone._aiInit=true;
+  zone.addEventListener('dragover',function(e){e.preventDefault();zone.style.borderColor='var(--red)';zone.style.background='#fdeaea';});
+  zone.addEventListener('dragleave',function(){zone.style.borderColor='var(--border2)';zone.style.background='';});
+  zone.addEventListener('drop',function(e){
+    e.preventDefault();zone.style.borderColor='var(--border2)';zone.style.background='';
+    var files=e.dataTransfer.files;
+    if(files&&files.length){FAQ_aiProcessFiles(files);}
+  });
+}
+
+/* ── File import ── */
 function FAQ_aiImport(ev){
-  var file = ev.target.files[0];
-  ev.target.value = '';
-  if(!file) return;
-  FAQ_AI_fileObj  = file;
-  FAQ_AI_pending  = null;
-  FAQ_AI_fileText = null;
-  FAQ_aiShowModal();
-  FAQ_aiSetStatus('Reading <strong>'+esc(file.name)+'</strong>...');
-  FAQ_aiShowLoading('Reading document...');
+  var files=ev.target.files;
+  ev.target.value='';
+  if(!files||!files.length)return;
+  FAQ_aiProcessFiles(files);
+}
 
-  // Read file as base64 for PDF/DOCX, or text for txt/odt
-  var ext = file.name.split('.').pop().toLowerCase();
-  if(ext === 'txt'){
-    var reader = new FileReader();
-    reader.onload = function(e){
-      FAQ_AI_fileText = e.target.result;
-      FAQ_aiCallClaude(null, null);
-    };
-    reader.readAsText(file);
-  } else {
-    // For PDF, DOCX, ODT — send as base64 document
-    var reader2 = new FileReader();
-    reader2.onload = function(e){
-      var b64 = e.target.result.split(',')[1];
-      var mime = file.type || FAQ_aiGuessMime(ext);
-      FAQ_aiCallClaude(b64, mime);
-    };
-    reader2.readAsDataURL(file);
-  }
+function FAQ_aiProcessFiles(files){
+  FAQ_AI_mode='file';
+  FAQ_AI_fileObjs=Array.from(files);
+  FAQ_aiHideInput();
+  FAQ_aiSetStatus('Reading <strong>'+FAQ_AI_fileObjs.length+' file(s)</strong>...','show');
+  FAQ_aiShowLoading('Reading files...');
+  // Read all files, then send to Claude
+  var promises=FAQ_AI_fileObjs.map(function(file){
+    return new Promise(function(resolve){
+      var ext=file.name.split('.').pop().toLowerCase();
+      if(ext==='txt'||ext==='md'||ext==='csv'){
+        var r=new FileReader();
+        r.onload=function(e){resolve({name:file.name,type:'text',content:e.target.result});};
+        r.readAsText(file);
+      } else {
+        var r2=new FileReader();
+        r2.onload=function(e){
+          resolve({name:file.name,type:'b64',mime:file.type||FAQ_aiGuessMime(ext),content:e.target.result.split(',')[1]});
+        };
+        r2.readAsDataURL(file);
+      }
+    });
+  });
+  Promise.all(promises).then(function(fileData){
+    FAQ_aiCallClaude(fileData,null);
+  });
 }
 
 function FAQ_aiGuessMime(ext){
-  var map = {
-    pdf:'application/pdf',
-    doc:'application/msword',
+  return {pdf:'application/pdf',doc:'application/msword',
     docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     odt:'application/vnd.oasis.opendocument.text',
-    txt:'text/plain'
-  };
-  return map[ext] || 'application/octet-stream';
+    ppt:'application/vnd.ms-powerpoint',
+    pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    xls:'application/vnd.ms-excel',
+    xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    txt:'text/plain',rtf:'application/rtf',md:'text/markdown'}[ext]||'application/octet-stream';
 }
 
-function FAQ_aiCallClaude(b64, mime){
-  FAQ_aiSetLoadingMsg('Analysing content with AI...');
+/* ── URL scraping ── */
+function FAQ_aiScrapeUrls(){
+  var raw=document.getElementById('faq-ai-urls').value.trim();
+  if(!raw){alert('Please enter at least one URL.');return;}
+  FAQ_AI_urlList=raw.split(/[\n\r]+/).map(function(u){return u.trim();}).filter(function(u){return u.length>0;});
+  FAQ_AI_mode='url';
+  FAQ_aiHideInput();
+  FAQ_aiSetStatus('Scraping <strong>'+FAQ_AI_urlList.length+' URL(s)</strong>...','show');
+  FAQ_aiShowLoading('Fetching pages...');
 
-  var systemPrompt = 'You are an expert at converting HR documentation into structured FAQ content. '
-    + 'Analyse the document and return ONLY a JSON array with no explanation, no markdown, no backticks. '
-    + 'The JSON must be a valid array of section objects following this exact schema:\n'
-    + '[{\n'
-    + '  "title": "Section title",\n'
-    + '  "topics": [{\n'
-    + '    "title": "Topic title",\n'
-    + '    "items": [{"type":"freetext","question":"Q?","answer":"<p>HTML answer</p>"}],\n'
-    + '    "subtopics": [{\n'
-    + '      "title": "Subtopic title",\n'
-    + '      "items": [{"type":"freetext","question":"Q?","answer":"<p>HTML answer</p>"}]\n'
-    + '    }]\n'
-    + '  }]\n'
-    + '}]\n'
-    + 'Rules:\n'
-    + '- answers must be valid HTML (use <p>, <ul><li>, <table>, <strong>, <ol> etc)\n'
-    + '- Preserve ALL information from the document — do not summarise or omit details\n'
-    + '- Use tables for comparative or tabular information\n'
-    + '- Group related content into logical subtopics\n'
-    + '- If the document is a single topic, wrap it in one section with one topic\n'
-    + '- Return ONLY the JSON array, nothing else';
+  // Use Claude with web search / direct URL content via fetch proxy
+  // We'll ask Claude to work from the URLs directly
+  FAQ_aiCallClaude(null, FAQ_AI_urlList);
+}
 
-  var userContent = [];
+/* ── Call Claude API ── */
+function FAQ_aiCallClaude(fileData, urls){
+  FAQ_aiSetLoadingMsg('Analysing with AI...');
 
-  if(b64 && mime){
-    // Send as document for PDF/DOCX
-    if(mime === 'application/pdf'){
-      userContent.push({type:'document', source:{type:'base64', media_type:'application/pdf', data:b64}});
-    } else {
-      // For DOCX/ODT — Claude can read them as documents
-      userContent.push({type:'document', source:{type:'base64', media_type:mime, data:b64}});
-    }
-    userContent.push({type:'text', text:'Convert this entire document into a structured FAQ JSON array following the schema in the system prompt. Return ONLY the JSON.'});
-  } else {
-    // Plain text
-    userContent.push({type:'text', text:'Convert this document text into a structured FAQ JSON array following the schema in the system prompt. Return ONLY the JSON.\n\n'+FAQ_AI_fileText});
+  var systemPrompt='You are an expert at converting HR documentation into structured FAQ content for a university immigration services team. Analyse all provided content thoroughly and return ONLY a valid JSON array with no explanation, no markdown fences. The JSON must follow this exact schema: [{"title":"Section title","topics":[{"title":"Topic title","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}],"subtopics":[{"title":"Subtopic","items":[{"type":"freetext","question":"Q?","answer":"<p>HTML</p>"}]}]}]}] Rules: - answers must be valid HTML using p ul li ol table strong em etc. - Preserve ALL information - never summarise or omit. - Use tables for comparative or tabular data. - Group related content into logical subtopics. - If multiple files or URLs are provided, combine them logically into sections. - Return ONLY the JSON array, nothing else';
+
+    var userContent=[];
+
+  if(fileData&&fileData.length){
+    fileData.forEach(function(f){
+      if(f.type==='text'){
+        userContent.push({type:'text',text:'File: '+f.name+'\n\n'+f.content});
+      } else {
+        // Send as document
+        userContent.push({type:'document',source:{type:'base64',media_type:f.mime,data:f.content},
+          title:f.name});
+      }
+    });
+    userContent.push({type:'text',text:'Convert all the above document(s) into a structured FAQ JSON array. Return ONLY the JSON.'});
+  } else if(urls&&urls.length){
+    var urlText=urls.map(function(u,i){return (i+1)+'. '+u;}).join('\n');
+    userContent.push({type:'text',text:'Please visit and read the content from these URLs, then convert everything into a structured FAQ JSON array:\n\n'+urlText+'\n\nReturn ONLY the JSON array.'});
   }
 
   fetch('https://api.anthropic.com/v1/messages',{
@@ -3568,53 +3626,43 @@ function FAQ_aiCallClaude(b64, mime){
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:8000,
-      system: systemPrompt,
-      messages:[{role:'user', content:userContent}]
+      system:systemPrompt,
+      messages:[{role:'user',content:userContent}]
     })
   })
   .then(function(r){
-    if(!r.ok) return r.text().then(function(t){throw new Error('API error '+r.status+': '+t);});
+    if(!r.ok)return r.text().then(function(t){throw new Error('API error '+r.status+': '+t.substring(0,200));});
     return r.json();
   })
   .then(function(data){
-    var text = (data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-    // Strip any accidental markdown fences
-    text = text.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
-    var parsed = JSON.parse(text);
-    if(!Array.isArray(parsed)) throw new Error('Response was not a JSON array');
-    // Inject IDs
-    FAQ_AI_pending = FAQ_aiInjectIds(parsed);
+    var text=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+    text=text.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    // Handle wrapped object
+    if(text.charAt(0)==='{') text='['+text+']';
+    var parsed=JSON.parse(text);
+    if(!Array.isArray(parsed))throw new Error('Response was not a JSON array');
+    FAQ_AI_pending=FAQ_aiInjectIds(parsed);
     FAQ_aiShowPreview(FAQ_AI_pending);
   })
   .catch(function(err){
     FAQ_aiHideLoading();
     FAQ_aiShowError('Error: '+err.message);
+    document.getElementById('faq-ai-input-panel').style.display='block';
   });
 }
 
 function FAQ_aiInjectIds(sections){
   return sections.map(function(sec){
-    sec.id = sec.id || FAQ_sid();
-    sec._open = true;
+    sec.id=sec.id||FAQ_sid();sec._open=true;
     (sec.topics||[]).forEach(function(t){
-      t.id = t.id || FAQ_tid();
-      t._open = true;
+      t.id=t.id||FAQ_tid();t._open=true;
       (t.items||[]).forEach(function(it){
-        it.id = it.id || FAQ_qid();
-        it._open = true;
-        it._mediaOpen = false;
-        it.options = it.options||[];
-        it.media = it.media||[];
+        it.id=it.id||FAQ_qid();it._open=true;it._mediaOpen=false;it.options=it.options||[];it.media=it.media||[];
       });
       (t.subtopics||[]).forEach(function(st){
-        st.id = st.id || FAQ_stid();
-        st._open = false;
+        st.id=st.id||FAQ_stid();st._open=false;
         (st.items||[]).forEach(function(it){
-          it.id = it.id || FAQ_qid();
-          it._open = true;
-          it._mediaOpen = false;
-          it.options = it.options||[];
-          it.media = it.media||[];
+          it.id=it.id||FAQ_qid();it._open=true;it._mediaOpen=false;it.options=it.options||[];it.media=it.media||[];
         });
       });
     });
@@ -3624,95 +3672,72 @@ function FAQ_aiInjectIds(sections){
 
 function FAQ_aiShowPreview(sections){
   FAQ_aiHideLoading();
-  FAQ_aiSetStatus('AI generated <strong>'+sections.length+' section(s)</strong> — review below:');
-  var html = sections.map(function(sec){
-    var topicsHtml = (sec.topics||[]).map(function(t){
-      var subtopicsHtml = (t.subtopics||[]).map(function(st){
-        return '<div style="margin-left:16px;padding:4px 8px;border-left:2px solid var(--amber);margin-top:4px">'
+  var total=sections.reduce(function(a,s){return a+(s.topics||[]).reduce(function(b,t){return b+t.items.length+(t.subtopics||[]).reduce(function(c,st){return c+st.items.length;},0);},0);},0);
+  document.getElementById('faq-ai-status-preview').innerHTML='AI generated <strong>'+sections.length+' section(s)</strong>, <strong>'+total+' question(s)</strong> — review below:';
+  var html=sections.map(function(sec){
+    var topicsHtml=(sec.topics||[]).map(function(t){
+      var subHtml=(t.subtopics||[]).map(function(st){
+        return '<div style="margin-left:14px;padding:3px 8px;border-left:2px solid var(--amber);margin-top:3px">'
           +'<div style="font-size:11px;font-weight:700;color:#7a5000;text-transform:uppercase">Subtopic: '+esc(st.title)+'</div>'
-          +(st.items||[]).map(function(it){return '<div style="font-size:12px;color:var(--ink2);padding:2px 0">&#9656; '+esc(it.question)+'</div>';}).join('')
+          +(st.items||[]).map(function(it){return '<div style="font-size:11.5px;color:var(--ink2);padding:1px 0">&#9656; '+esc(it.question)+'</div>';}).join('')
           +'</div>';
       }).join('');
-      return '<div style="margin-left:12px;padding:4px 8px;border-left:2px solid var(--border2);margin-top:4px">'
+      return '<div style="margin-left:12px;padding:3px 8px;border-left:2px solid var(--border2);margin-top:3px">'
         +'<div style="font-size:12px;font-weight:600;color:var(--ink)">Topic: '+esc(t.title)+'</div>'
-        +(t.items||[]).map(function(it){return '<div style="font-size:12px;color:var(--ink2);padding:2px 0">&#9656; '+esc(it.question)+'</div>';}).join('')
-        +subtopicsHtml
-        +'</div>';
+        +(t.items||[]).map(function(it){return '<div style="font-size:11.5px;color:var(--ink2);padding:1px 0">&#9656; '+esc(it.question)+'</div>';}).join('')
+        +subHtml+'</div>';
     }).join('');
-    return '<div style="margin-bottom:10px;padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:6px">'
-      +'<div style="font-size:13px;font-weight:700;color:var(--darkred)">Section: '+esc(sec.title)+'</div>'
-      +topicsHtml
-      +'</div>';
+    return '<div style="margin-bottom:8px;padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:6px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--darkred)">&#128193; '+esc(sec.title)+'</div>'
+      +topicsHtml+'</div>';
   }).join('');
-
-  document.getElementById('faq-ai-preview-content').innerHTML = html;
-  document.getElementById('faq-ai-preview').style.display = 'block';
-  document.getElementById('faq-ai-buttons-initial').style.display = 'none';
-  document.getElementById('faq-ai-error').style.display = 'none';
+  document.getElementById('faq-ai-preview-content').innerHTML=html;
+  document.getElementById('faq-ai-preview').style.display='block';
+  document.getElementById('faq-ai-status').style.display='none';
+  document.getElementById('faq-ai-error').style.display='none';
 }
 
 function FAQ_aiConfirm(){
-  if(!FAQ_AI_pending) return;
-  FAQ_DATA = FAQ_DATA.concat(FAQ_AI_pending);
-  FAQ_save();
-  FAQ_renderEditor();
-  FAQ_render();
+  if(!FAQ_AI_pending)return;
+  var added=FAQ_AI_pending.length;
+  FAQ_DATA=FAQ_DATA.concat(FAQ_AI_pending);
+  FAQ_save();FAQ_renderEditor();FAQ_render();
   FAQ_aiCancel();
-  showToast('FAQ updated with '+FAQ_AI_pending.length+' new section(s) ✓');
-  FAQ_AI_pending = null;
+  showToast(added+' new section(s) added to FAQ ✓');
+  FAQ_AI_pending=null;
 }
 
 function FAQ_aiRetry(){
-  FAQ_AI_pending = null;
-  document.getElementById('faq-ai-preview').style.display = 'none';
-  document.getElementById('faq-ai-buttons-initial').style.display = 'flex';
-  FAQ_aiSetStatus('Retrying with <strong>'+esc(FAQ_AI_fileObj ? FAQ_AI_fileObj.name : 'document')+'</strong>...');
+  FAQ_AI_pending=null;
+  document.getElementById('faq-ai-preview').style.display='none';
   FAQ_aiShowLoading('Re-analysing...');
-  if(FAQ_AI_fileObj){
-    var ext = FAQ_AI_fileObj.name.split('.').pop().toLowerCase();
-    if(ext === 'txt'){
-      FAQ_aiCallClaude(null, null);
-    } else {
-      var reader = new FileReader();
-      reader.onload = function(e){
-        var b64 = e.target.result.split(',')[1];
-        var mime = FAQ_AI_fileObj.type || FAQ_aiGuessMime(ext);
-        FAQ_aiCallClaude(b64, mime);
-      };
-      reader.readAsDataURL(FAQ_AI_fileObj);
-    }
+  if(FAQ_AI_mode==='url'){
+    FAQ_aiCallClaude(null,FAQ_AI_urlList);
+  } else {
+    FAQ_aiProcessFiles(FAQ_AI_fileObjs);
   }
 }
 
 function FAQ_aiCancel(){
   document.getElementById('faq-ai-modal').classList.add('hidden');
-  FAQ_AI_pending  = null;
-  FAQ_AI_fileText = null;
-  FAQ_AI_fileObj  = null;
+  FAQ_AI_pending=null;FAQ_AI_fileObjs=[];FAQ_AI_urlList=[];
 }
 
-function FAQ_aiShowModal(){
-  var modal = document.getElementById('faq-ai-modal');
-  modal.classList.remove('hidden');
-  document.getElementById('faq-ai-preview').style.display = 'none';
-  document.getElementById('faq-ai-loading').style.display = 'none';
-  document.getElementById('faq-ai-error').style.display = 'none';
-  document.getElementById('faq-ai-buttons-initial').style.display = 'flex';
-  document.getElementById('faq-ai-status').innerHTML = '';
+function FAQ_aiHideInput(){ document.getElementById('faq-ai-input-panel').style.display='none'; }
+function FAQ_aiSetStatus(html,show){
+  var el=document.getElementById('faq-ai-status');
+  el.innerHTML=html;el.style.display=show?'block':'none';
 }
-function FAQ_aiSetStatus(html){ document.getElementById('faq-ai-status').innerHTML = html; }
 function FAQ_aiShowLoading(msg){
-  document.getElementById('faq-ai-loading').style.display = 'block';
-  document.getElementById('faq-ai-loading-msg').textContent = msg||'Processing...';
-  document.getElementById('faq-ai-buttons-initial').style.display = 'none';
+  document.getElementById('faq-ai-loading').style.display='block';
+  document.getElementById('faq-ai-loading-msg').textContent=msg||'Processing...';
 }
-function FAQ_aiHideLoading(){ document.getElementById('faq-ai-loading').style.display = 'none'; }
+function FAQ_aiHideLoading(){ document.getElementById('faq-ai-loading').style.display='none'; }
 function FAQ_aiSetLoadingMsg(msg){ var el=document.getElementById('faq-ai-loading-msg');if(el)el.textContent=msg; }
 function FAQ_aiShowError(msg){
-  var el=document.getElementById('faq-ai-error');
-  el.textContent=msg;el.style.display='block';
-  document.getElementById('faq-ai-buttons-initial').style.display='flex';
+  var el=document.getElementById('faq-ai-error');el.textContent=msg;el.style.display='block';
 }
+
 
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
