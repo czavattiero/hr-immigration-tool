@@ -838,7 +838,12 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     </div>
 
     <!-- Error -->
-    <div id="faq-ai-error" style="display:none;padding:10px 12px;background:#fdeaea;border:1px solid #e5b0b0;border-radius:6px;font-size:13px;color:#8b1a1a
+    <div id="faq-ai-error" style="display:none;padding:10px 12px;background:#fdeaea;border:1px solid #e5b0b0;border-radius:6px;font-size:13px;color:#8b1a1a"></div>
+
+
+
+
+<script>
 /* ===== UTILS ===== */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escA(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -4135,13 +4140,10 @@ function FAQ_initDeepLinks(){
   });
 }
 
+
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
 if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
-loadData();
-FAQ_load();
-FAQ_loadApiKey();
-FAQ_initDeepLinks();Enter')submitPassword();});
 loadData();
 FAQ_load();
 FAQ_loadApiKey();
