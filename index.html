@@ -3734,10 +3734,24 @@ function FAQ_aiCallClaude(fileData, urls){
   })
   .then(function(data){
     var text=(data.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-        text=text.replace(/[ \t]*[\n\r]{2,}[ \t]*/g,'\n\n').trim();
-    // Handle wrapped object
+    // Strip all variants of markdown code fences
+    text=text.replace(/^```+(?:json)?\s*/i,'').replace(/\s*```+\s*$/,'').trim();
+    // Strip any leading/trailing whitespace or newlines again
+    text=text.trim();
+    // Handle single object wrapped in {} instead of []
     if(text.charAt(0)==='{') text='['+text+']';
-    var parsed=JSON.parse(text);
+    // Find first [ in case there's preamble text before the JSON
+    var firstBracket=text.indexOf('[');
+    var lastBracket=text.lastIndexOf(']');
+    if(firstBracket>0&&lastBracket>firstBracket) text=text.substring(firstBracket,lastBracket+1);
+    var parsed;
+    try{parsed=JSON.parse(text);}
+    catch(jsonErr){
+      // Last resort: try to extract JSON array with regex
+      var match=text.match(/\[[\s\S]*\]/);
+      if(match){try{parsed=JSON.parse(match[0]);}catch(e2){throw new Error('Could not parse response as JSON. Response started with: '+text.substring(0,100));}}
+      else{throw new Error('No JSON array found in response. Response started with: '+text.substring(0,100));}
+    }
     if(!Array.isArray(parsed))throw new Error('Response was not a JSON array');
     FAQ_AI_pending=FAQ_aiInjectIds(parsed);
     FAQ_aiShowPreview(FAQ_AI_pending);
