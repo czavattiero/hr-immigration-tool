@@ -3609,25 +3609,54 @@ function FAQ_aiProcessFiles(files){
   FAQ_aiHideInput();
   FAQ_aiSetStatus('Reading <strong>'+FAQ_AI_fileObjs.length+' file(s)</strong>...','show');
   FAQ_aiShowLoading('Reading files...');
-  // Read all files, then send to Claude
+
   var promises=FAQ_AI_fileObjs.map(function(file){
     return new Promise(function(resolve){
       var ext=file.name.split('.').pop().toLowerCase();
-      if(ext==='txt'||ext==='md'||ext==='csv'){
+      var mime=file.type||FAQ_aiGuessMime(ext);
+
+      // Text files — read as plain text
+      if(['txt','md','csv','rtf'].indexOf(ext)>=0){
         var r=new FileReader();
-        r.onload=function(e){resolve({name:file.name,type:'text',content:e.target.result});};
+        r.onload=function(e){resolve({name:file.name,apiType:'text',content:e.target.result});};
+        r.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read file]'});};
         r.readAsText(file);
-      } else {
+
+      // PDF — send as base64 document (supported by Claude natively in all browsers)
+      } else if(ext==='pdf'||mime==='application/pdf'){
         var r2=new FileReader();
-        r2.onload=function(e){
-          resolve({name:file.name,type:'b64',mime:file.type||FAQ_aiGuessMime(ext),content:e.target.result.split(',')[1]});
-        };
+        r2.onload=function(e){resolve({name:file.name,apiType:'pdf',mime:'application/pdf',content:e.target.result.split(',')[1]});};
+        r2.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read PDF]'});};
         r2.readAsDataURL(file);
+
+      // Images — send as base64 image
+      } else if(mime.startsWith('image/')||['jpg','jpeg','png','gif','webp'].indexOf(ext)>=0){
+        var r3=new FileReader();
+        r3.onload=function(e){resolve({name:file.name,apiType:'image',mime:mime,content:e.target.result.split(',')[1]});};
+        r3.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read image]'});};
+        r3.readAsDataURL(file);
+
+      // Word, PowerPoint, Excel, ODT — send as base64 document
+      // Claude supports docx natively; for others it will do its best
+      } else {
+        var r4=new FileReader();
+        r4.onload=function(e){
+          var b64=e.target.result.split(',')[1];
+          // Try to send as document — Claude handles docx/pptx natively
+          resolve({name:file.name,apiType:'document',mime:mime||'application/octet-stream',content:b64});
+        };
+        r4.onerror=function(){resolve({name:file.name,apiType:'text',content:'[Could not read file: '+file.name+']'});};
+        r4.readAsDataURL(file);
       }
     });
   });
+
   Promise.all(promises).then(function(fileData){
     FAQ_aiCallClaude(fileData,null);
+  }).catch(function(err){
+    FAQ_aiHideLoading();
+    FAQ_aiShowError('Error reading files: '+err.message);
+    document.getElementById('faq-ai-input-panel').style.display='block';
   });
 }
 
@@ -3704,15 +3733,25 @@ function FAQ_aiCallClaude(fileData, urls){
 
   if(fileData&&fileData.length){
     fileData.forEach(function(f){
-      if(f.type==='text'){
-        userContent.push({type:'text',text:'File: '+f.name+'\n\n'+f.content});
-      } else {
-        // Send as document
-        userContent.push({type:'document',source:{type:'base64',media_type:f.mime,data:f.content},
-          title:f.name});
+      if(f.apiType==='text'){
+        userContent.push({type:'text',text:'--- FILE: '+f.name+' ---\n\n'+f.content});
+      } else if(f.apiType==='pdf'){
+        userContent.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:f.content}});
+        userContent.push({type:'text',text:'(Above is the PDF file: '+f.name+')'});
+      } else if(f.apiType==='image'){
+        userContent.push({type:'image',source:{type:'base64',media_type:f.mime,data:f.content}});
+        userContent.push({type:'text',text:'(Above is an image: '+f.name+' - extract any text/table content visible)'});
+      } else if(f.apiType==='document'){
+        // Word, PowerPoint, Excel etc — send as document
+        try{
+          userContent.push({type:'document',source:{type:'base64',media_type:f.mime,data:f.content}});
+          userContent.push({type:'text',text:'(Above is the file: '+f.name+')'});
+        }catch(e){
+          userContent.push({type:'text',text:'[Could not process file: '+f.name+']'});
+        }
       }
     });
-    userContent.push({type:'text',text:'Convert all the above document(s) into a structured FAQ JSON array. Return ONLY the JSON.'});
+    userContent.push({type:'text',text:'Convert ALL the above document content into a structured FAQ JSON array. Return ONLY the JSON array with no explanation.'});
   } else if(urls&&urls.length){
     var urlText=urls.map(function(u,i){return (i+1)+'. '+u;}).join('\n');
     userContent.push({type:'text',text:'Please visit and read the content from these URLs, then convert everything into a structured FAQ JSON array:\n\n'+urlText+'\n\nReturn ONLY the JSON array.'});
