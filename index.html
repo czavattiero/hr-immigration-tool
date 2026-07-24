@@ -992,7 +992,7 @@ var DEFAULT_DATA=[
     {label:'LMIA-based Work Permit',output:'<p>Immigration category: <strong>LMIA-based Work Permit</strong> &mdash; positive LMIA obtained. Please attach LMIA confirmation letter.</p>',docs:[]},
     {label:'Francophone Mobility Program',output:'<p>Immigration category: <strong>Francophone Mobility Program</strong> &mdash; LMIA-exempt under the Francophone Mobility stream. Position title: [position title].</p>',docs:[]}
   ]},
-  {id:'s_pt',type:'freetext',label:'Position title',question:"What is the position title?"},
+  {id:'s1a',type:'freetext',label:'Position title',question:"What is the position title?"},
   {id:'s2',type:'dynamic',label:'Work permit status',question:"What is the client's current work permit status?",options:[
     {label:'New application',output:'<p>Status: <strong>New work permit application</strong>. All required documents must be compiled before submission.</p>',docs:[]},
     {label:'Extension required',output:'<p>Status: <strong>Work permit extension</strong> required. Submit at least 30 days before current permit expires.</p>',docs:[]},
@@ -1614,7 +1614,7 @@ function isPositionTitleSection(s){
   if(s.type!=='freetext') return false;
   var q=normalizeQuestionText(s.question);
   return q===POSITION_TITLE_QUESTION_NORMALIZED
-    || (q.indexOf('position title')!==-1);
+    || (q.indexOf('position')!==-1 && q.indexOf('title')!==-1);
 }
 function replacePositionTitlePlaceholder(content,escapeForHtml){
   var text=String(content||'');
