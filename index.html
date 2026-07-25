@@ -852,8 +852,8 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div style="margin-bottom:10px">
       <label style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Move as:</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" id="faq-move-as-topic" onclick="FAQ_moveSetType('topic')">&#128193; Topic (in a Section)</button>
-        <button class="btn btn-secondary btn-sm" id="faq-move-as-subtopic" onclick="FAQ_moveSetType('subtopic')">&#128196; Subtopic (in a Topic)</button>
+        <button class="btn btn-secondary btn-sm" id="faq-move-as-topic" data-action="FAQ_moveSetTypeBtn" data-moveas="topic">&#128193; Topic (in a Section)</button>
+        <button class="btn btn-secondary btn-sm" id="faq-move-as-subtopic" data-action="FAQ_moveSetTypeBtn" data-moveas="subtopic">&#128196; Subtopic (in a Topic)</button>
       </div>
     </div>
     <div style="margin-bottom:14px">
@@ -861,8 +861,8 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <select id="faq-move-dest" style="width:100%;border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:13.5px;font-family:inherit"></select>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-sm" onclick="FAQ_moveExecute()">&#10003; Move here</button>
-      <button class="btn btn-secondary btn-sm" onclick="FAQ_moveCancel()">Cancel</button>
+      <button class="btn btn-primary btn-sm" data-action="FAQ_moveExecuteBtn">&#10003; Move here</button>
+      <button class="btn btn-secondary btn-sm" data-action="FAQ_moveCancelBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -3541,11 +3541,13 @@ function FAQ_importBackup(ev){
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;
   var a=el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
-  // Ignore all FAQ delegation when any modal is open
+  // Block all delegation when AI importer is open
   if(!document.getElementById('faq-ai-modal').classList.contains('hidden')) return;
-  if(!document.getElementById('faq-move-modal').classList.contains('hidden')) return;
-  // Ignore clicks inside modals
-  if(e.target.closest('#faq-ai-modal')||e.target.closest('#faq-move-modal')) return;
+  // Allow move modal own buttons through, block everything else
+  if(!document.getElementById('faq-move-modal').classList.contains('hidden')){
+    if(a!=='FAQ_moveSetTypeBtn'&&a!=='FAQ_moveExecuteBtn'&&a!=='FAQ_moveCancelBtn') return;
+  }
+  if(e.target.closest('#faq-ai-modal')) return;
   e.stopPropagation();
   // Collapsibles
   if(a==='FAQ_toggle'){FAQ_toggleItem(el.dataset.fid);return;}
@@ -3560,6 +3562,9 @@ document.addEventListener('click',function(e){
   if(a==='FAQ_addSection'){FAQ_addSection();return;}
   if(a==='FAQ_moveTopicTo'){FAQ_moveTopicToPrompt(el.dataset.sid,el.dataset.tid);return;}
   if(a==='FAQ_moveSubtopicTo'){FAQ_moveSubtopicToPrompt(el.dataset.sid,el.dataset.tid,el.dataset.stid);return;}
+  if(a==='FAQ_moveSetTypeBtn'){FAQ_moveSetType(el.dataset.moveas);return;}
+  if(a==='FAQ_moveExecuteBtn'){FAQ_moveExecute();return;}
+  if(a==='FAQ_moveCancelBtn'){FAQ_moveCancel();return;}
   if(a==='FAQ_delSection'){FAQ_delSection(el.dataset.sid);return;}
   if(a==='FAQ_moveSection'){FAQ_moveSection(el.dataset.sid,parseInt(el.dataset.dir));return;}
   // Topics
