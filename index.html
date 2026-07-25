@@ -4417,15 +4417,23 @@ function FAQ_showMoveSelect(btn, itemType, sid, tid, stid){
       var allTopics = (srcSec.topics||[]);
 
       if(moveAs === 't'){
-        // Each topic in the section becomes a topic in the destination section
-        // OR we merge the section as one topic with all its content
         var destSec = FAQ_findSection(parts[1]);
         if(!destSec){ showToast('Destination not found'); return; }
-        // Move all topics from this section into the destination section
-        allTopics.forEach(function(t){ destSec.topics = destSec.topics||[]; destSec.topics.push(t); });
-        // Remove the section
+        var newTopic = {
+          id: srcSec.id,
+          title: srcSec.title,
+          _open: false,
+          items: [],
+          subtopics: allTopics.map(function(t){
+            var items = (t.items||[]).slice();
+            (t.subtopics||[]).forEach(function(st){ items = items.concat(st.items||[]); });
+            return {id:t.id, title:t.title, _open:false, items:items};
+          })
+        };
+        destSec.topics = destSec.topics||[];
+        destSec.topics.push(newTopic);
         FAQ_DATA = FAQ_DATA.filter(function(s){ return s.id !== sid; });
-        showToast('Section merged into "' + (destSec.title||'section') + '" ✓');
+        showToast('Section converted to topic in "' + (destSec.title||'section') + '" ✓');
       } else {
         // Convert entire section into a subtopic of a topic
         var destTopic = FAQ_findTopic(parts[2]);
