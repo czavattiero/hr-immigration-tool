@@ -2982,7 +2982,7 @@ function FAQ_render(){
       if(!directItems.length&&!matchedSubtopics.length)return '';
       sectionVisible+=directItems.length+matchedSubtopics.reduce(function(a,x){return a+x.items.length;},0);
 
-      var isTopicOpen=term?true:(topic._userOpen===true);
+      var isTopicOpen=term?true:!!topic._userOpen;
       var topicBodyId='faq-topic-body-'+topic.id;
       var html='<div class="faq-topic" id="ftopic-'+topic.id+'">'
         +'<div class="faq-topic-title faq-topic-title-collapsible" data-action="FAQ_toggleUserTopic" data-tid="'+escA(topic.id)+'">'
@@ -3001,7 +3001,7 @@ function FAQ_render(){
     if(!sectionVisible&&term)return '';
     totalVisible+=sectionVisible;
 
-    var isSectionOpen=term?true:(section._userOpen===true);
+    var isSectionOpen=term?true:!!section._userOpen;
     var secBodyId='faq-sec-body-'+section.id;
     return '<div class="faq-section" id="fsec-'+section.id+'">'
       +'<div class="faq-section-title" data-action="FAQ_toggleUserSection" data-sid="'+escA(section.id)+'">'
@@ -3091,7 +3091,7 @@ function FAQ_walkText(node,term){
 /* Toggle user-view collapsibles */
 function FAQ_toggleUserSection(sid){
   var sec=FAQ_DATA.find(function(s){return s.id===sid;});if(!sec)return;
-  sec._userOpen=(sec._userOpen===true)?false:true;
+  sec._userOpen=!sec._userOpen;
   var body=document.getElementById('faq-sec-body-'+sid);
   var arrow=document.getElementById('faq-sarrow-'+sid);
   if(body)body.classList.toggle('open',sec._userOpen);
@@ -3099,7 +3099,7 @@ function FAQ_toggleUserSection(sid){
 }
 function FAQ_toggleUserTopic(tid){
   var topic=FAQ_findTopic(tid);if(!topic)return;
-  topic._userOpen=(topic._userOpen===true)?false:true;
+  topic._userOpen=!topic._userOpen;
   var body=document.getElementById('faq-topic-body-'+tid);
   var arrow=document.getElementById('faq-tarrow-'+tid);
   if(body)body.classList.toggle('open',topic._userOpen);
@@ -3139,7 +3139,7 @@ function FAQ_initItemRTEs(item){
 
 /* ── Section block ── */
 function FAQ_buildSectionBlock(sec,si){
-  var isOpen=sec._open===true;
+  var isOpen=!!sec._open;
   var topicsHtml=(sec.topics||[]).map(function(topic,ti){return FAQ_buildTopicBlock(sec,topic,ti);}).join('');
   return '<div class="faq-topic-block" id="fedSec-'+sec.id+'">'
     +'<div class="faq-topic-block-hdr faq-section-hdr" data-action="FAQ_toggleSection" data-sid="'+sec.id+'">'
@@ -3158,7 +3158,7 @@ function FAQ_buildSectionBlock(sec,si){
 
 /* ── Topic block ── */
 function FAQ_buildTopicBlock(sec,topic,ti){
-  var isOpen=topic._open===true;
+  var isOpen=!!topic._open;
   var directHtml=(topic.items||[]).map(function(item){return FAQ_buildQABlock(sec.id,topic.id,null,item);}).join('');
   var subtopicHtml=(topic.subtopics||[]).map(function(st,si){return FAQ_buildSubtopicBlock(sec,topic,st,si);}).join('');
   var nTopics=(sec.topics||[]).length;
@@ -3182,7 +3182,7 @@ function FAQ_buildTopicBlock(sec,topic,ti){
 
 /* ── Subtopic block ── */
 function FAQ_buildSubtopicBlock(sec,topic,st,si){
-  var isOpen=st._open===true;
+  var isOpen=!!st._open;
   var itemsHtml=(st.items||[]).map(function(item){return FAQ_buildQABlock(sec.id,topic.id,st.id,item);}).join('');
   var nSt=(topic.subtopics||[]).length;
   return '<div class="faq-subtopic-block" id="fedSubtopic-'+st.id+'">'
@@ -3203,7 +3203,7 @@ function FAQ_buildSubtopicBlock(sec,topic,st,si){
 
 /* ── Q&A block ── */
 function FAQ_buildQABlock(sid,tid,stid,item){
-  var isOpen=item._open===true;
+  var isOpen=!!item._open;
   var isDropdown=item.type==='dropdown';
   var rteId='faq-rte-'+item.id;
   var optsHtml='';
@@ -3299,13 +3299,13 @@ function FAQ_findItem(iid){
 
 /* ── Toggle editor collapsibles ── */
 function FAQ_toggleSection(sid){
-  var s=FAQ_findSection(sid);if(!s)return;s._open=(s._open===false)?true:false;
+  var s=FAQ_findSection(sid);if(!s)return;s._open=!s._open;
   var b=document.getElementById('fedSecItems-'+sid);
   var a=document.querySelector('#fedSec-'+sid+' .faq-section-hdr .faq-collapse-arrow');
   if(b)b.classList.toggle('open',s._open);if(a)a.classList.toggle('open',s._open);
 }
 function FAQ_toggleTopic(tid){
-  var t=FAQ_findTopic(tid);if(!t)return;t._open=(t._open===false)?true:false;
+  var t=FAQ_findTopic(tid);if(!t)return;t._open=!t._open;
   var b=document.getElementById('fedTopicItems-'+tid);
   var a=document.querySelector('#fedTopic-'+tid+' > .faq-topic-block-hdr .faq-collapse-arrow');
   if(b)b.classList.toggle('open',t._open);if(a)a.classList.toggle('open',t._open);
@@ -3313,14 +3313,14 @@ function FAQ_toggleTopic(tid){
 function FAQ_toggleSubtopic(stid){
   var t=null;
   for(var i=0;i<FAQ_DATA.length;i++){for(var j=0;j<(FAQ_DATA[i].topics||[]).length;j++){var st=(FAQ_DATA[i].topics[j].subtopics||[]).find(function(s){return s.id===stid;});if(st){t=st;break;}}if(t)break;}
-  if(!t)return;t._open=(t._open===false)?true:false;
+  if(!t)return;t._open=!t._open;
   var b=document.getElementById('fedSubItems-'+stid);
   var a=document.querySelector('#fedSubtopic-'+stid+' > .faq-subtopic-block-hdr .faq-collapse-arrow');
   if(b)b.classList.toggle('open',t._open);if(a)a.classList.toggle('open',t._open);
 }
 function FAQ_toggleQA(iid){
   var item=FAQ_findItem(iid);if(!item)return;
-  item._open=(item._open===false)?true:false;
+  item._open=!item._open;
   var b=document.getElementById('fedqabody-'+iid);
   var a=document.querySelector('#fedqa-'+iid+' > .faq-qa-hdr .faq-collapse-arrow');
   if(b)b.classList.toggle('open',item._open);if(a)a.classList.toggle('open',item._open);
