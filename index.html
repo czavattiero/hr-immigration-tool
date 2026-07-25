@@ -4419,21 +4419,25 @@ function FAQ_showMoveSelect(btn, itemType, sid, tid, stid){
       if(moveAs === 't'){
         var destSec = FAQ_findSection(parts[1]);
         if(!destSec){ showToast('Destination not found'); return; }
+        if(destSec.id === sid){ showToast('Cannot move a section into itself'); return; }
+        // Section becomes a topic; its topics become subtopics
+        var topicsSnap = (srcSec.topics||[]).slice();
         var newTopic = {
-          id: srcSec.id,
+          id: FAQ_tid(),
           title: srcSec.title,
           _open: false,
           items: [],
-          subtopics: allTopics.map(function(t){
+          subtopics: topicsSnap.map(function(t){
+            // Each topic becomes a subtopic; merge its subtopics' items in
             var items = (t.items||[]).slice();
             (t.subtopics||[]).forEach(function(st){ items = items.concat(st.items||[]); });
-            return {id:t.id, title:t.title, _open:false, items:items};
+            return {id: t.id, title: t.title, _open: false, items: items};
           })
         };
         destSec.topics = destSec.topics||[];
         destSec.topics.push(newTopic);
         FAQ_DATA = FAQ_DATA.filter(function(s){ return s.id !== sid; });
-        showToast('Section converted to topic in "' + (destSec.title||'section') + '" ✓');
+        showToast('Section moved as topic in "' + (destSec.title||'section') + '" ✓');
       } else {
         // Convert entire section into a subtopic of a topic
         var destTopic = FAQ_findTopic(parts[2]);
