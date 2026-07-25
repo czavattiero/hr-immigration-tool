@@ -3169,7 +3169,7 @@ function FAQ_buildTopicBlock(sec,topic,ti){
     +'<input class="faq-topic-name-input" type="text" value="'+escA(topic.title||'')+'" placeholder="Topic name..." data-action="FAQ_setTopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" onclick="event.stopPropagation()">'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="-1" '+(ti===0?'disabled':'')+'>&#8593;</button>'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-dir="1" '+(ti===nTopics-1?'disabled':'')+'>&#8595;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveTopicTo" data-sid="'+sec.id+'" data-tid="'+topic.id+'" title="Move to different section">&#8645; Move to&hellip;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_showMove" data-type="topic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">Move to...</button>'
     +'<button class="btn btn-danger btn-sm" data-action="FAQ_delTopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'">Delete topic</button>'
     +'</div>'
     +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedTopicItems-'+topic.id+'">'
@@ -3192,7 +3192,7 @@ function FAQ_buildSubtopicBlock(sec,topic,st,si){
     +'<input class="faq-topic-name-input" type="text" value="'+escA(st.title||'')+'" placeholder="Subtopic name..." data-action="FAQ_setSubtopicTitle" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" onclick="event.stopPropagation()">'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" data-dir="1" '+(si===nSt-1?'disabled':'')+'>&#8595;</button>'
-    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSubtopicTo" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'" title="Move to different topic">&#8645; Move to&hellip;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_showMove" data-type="subtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">Move to...</button>'
     +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSubtopic" data-sid="'+sec.id+'" data-tid="'+topic.id+'" data-stid="'+st.id+'">Delete subtopic</button>'
     +'</div>'
     +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedSubItems-'+st.id+'">'
@@ -3557,6 +3557,7 @@ document.addEventListener('click',function(e){
   if(a==='FAQ_addSection'){FAQ_addSection();return;}
   if(a==='FAQ_moveTopicTo'){FAQ_moveTopicToPrompt(el.dataset.sid,el.dataset.tid);return;}
   if(a==='FAQ_moveSubtopicTo'){FAQ_moveSubtopicToPrompt(el.dataset.sid,el.dataset.tid,el.dataset.stid);return;}
+  if(a==='FAQ_showMove'){FAQ_showMoveSelect(el,el.dataset.type,el.dataset.sid,el.dataset.tid,el.dataset.stid||'');return;}
   if(a==='FAQ_moveSetTypeBtn'){FAQ_moveSetType(el.dataset.moveas);return;}
   if(a==='FAQ_moveExecuteBtn'){FAQ_moveExecute();return;}
   if(a==='FAQ_moveCancelBtn'){FAQ_moveCancel();return;}
@@ -4359,6 +4360,106 @@ function FAQ_moveCancel(){
   if(modal) modal.classList.add('hidden');
 }
 
+
+/* ── Inline Move To select ── */
+function FAQ_showMoveSelect(btn, itemType, sid, tid, stid){
+  // Remove any existing move selects
+  document.querySelectorAll('.faq-move-inline').forEach(function(el){el.remove();});
+  
+  // Build select element
+  var sel = document.createElement('select');
+  sel.className = 'faq-move-select faq-move-inline';
+  sel.style.cssText = 'font-size:11.5px;padding:2px 4px;border:1px solid var(--red);border-radius:4px;max-width:180px;margin-left:4px;background:#fff;color:var(--ink);cursor:pointer;';
+  
+  // Default option
+  var def = document.createElement('option');
+  def.value = '';
+  def.textContent = 'Choose destination...';
+  sel.appendChild(def);
+  
+  // Sections as topic destinations
+  var grp1 = document.createElement('optgroup');
+  grp1.label = 'As a Topic → Section';
+  FAQ_DATA.forEach(function(sec, i){
+    var opt = document.createElement('option');
+    opt.value = 't|' + sec.id;
+    opt.textContent = (i+1) + '. ' + (sec.title || '(untitled)');
+    grp1.appendChild(opt);
+  });
+  sel.appendChild(grp1);
+  
+  // Topics as subtopic destinations
+  var grp2 = document.createElement('optgroup');
+  grp2.label = 'As a Subtopic → Topic';
+  FAQ_DATA.forEach(function(sec){
+    (sec.topics||[]).forEach(function(t){
+      var opt = document.createElement('option');
+      opt.value = 'st|' + sec.id + '|' + t.id;
+      opt.textContent = '[' + (sec.title||'S') + '] ' + (t.title||'(untitled)');
+      grp2.appendChild(opt);
+    });
+  });
+  sel.appendChild(grp2);
+  
+  // On change: execute move
+  sel.addEventListener('change', function(){
+    var val = sel.value;
+    sel.remove();
+    if(!val) return;
+    var parts = val.split('|');
+    var moveAs = parts[0]; // 't' or 'st'
+    
+    if(itemType === 'topic'){
+      var srcSec = FAQ_findSection(sid);
+      var topic  = FAQ_findTopic(tid);
+      if(!srcSec || !topic){ showToast('Source not found'); return; }
+      if(moveAs === 't'){
+        var destSec = FAQ_findSection(parts[1]);
+        if(!destSec){ showToast('Destination not found'); return; }
+        srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== tid; });
+        destSec.topics = destSec.topics || [];
+        destSec.topics.push(topic);
+        showToast('Moved to "' + (destSec.title||'section') + '" ✓');
+      } else {
+        var destTopic = FAQ_findTopic(parts[2]);
+        if(!destTopic){ showToast('Destination not found'); return; }
+        var allItems = (topic.items||[]).slice();
+        (topic.subtopics||[]).forEach(function(st){ allItems = allItems.concat(st.items||[]); });
+        var newSub = {id:topic.id, title:topic.title, _open:false, items:allItems};
+        srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== tid; });
+        destTopic.subtopics = destTopic.subtopics || [];
+        destTopic.subtopics.push(newSub);
+        showToast('Moved as subtopic of "' + (destTopic.title||'topic') + '" ✓');
+      }
+    } else {
+      var srcTopic = FAQ_findTopic(tid);
+      var st = FAQ_findSubtopic(tid, stid);
+      if(!srcTopic || !st){ showToast('Source not found'); return; }
+      if(moveAs === 't'){
+        var destSec2 = FAQ_findSection(parts[1]);
+        if(!destSec2){ showToast('Destination not found'); return; }
+        srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== stid; });
+        var newTopic = {id:st.id, title:st.title, _open:false, items:st.items||[], subtopics:[]};
+        destSec2.topics = destSec2.topics || [];
+        destSec2.topics.push(newTopic);
+        showToast('Promoted to topic in "' + (destSec2.title||'section') + '" ✓');
+      } else {
+        var destTopic2 = FAQ_findTopic(parts[2]);
+        if(!destTopic2){ showToast('Destination not found'); return; }
+        srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== stid; });
+        destTopic2.subtopics = destTopic2.subtopics || [];
+        destTopic2.subtopics.push(st);
+        showToast('Moved to "' + (destTopic2.title||'topic') + '" ✓');
+      }
+    }
+    FAQ_save();
+    FAQ_renderEditor();
+  });
+  
+  // Insert after button
+  btn.parentNode.insertBefore(sel, btn.nextSibling);
+  sel.focus();
+}
 
 /* ===== INIT ===== */
 var pwInput=document.getElementById('pw-input');
