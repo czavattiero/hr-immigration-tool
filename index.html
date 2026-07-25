@@ -3148,6 +3148,7 @@ function FAQ_buildSectionBlock(sec,si){
     +'<input class="faq-topic-name-input" type="text" value="'+escA(sec.title||'')+'" placeholder="Section name..." data-action="FAQ_setSecTitle" data-sid="'+sec.id+'" onclick="event.stopPropagation()">'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSection" data-sid="'+sec.id+'" data-dir="-1" '+(si===0?'disabled':'')+'>&#8593;</button>'
     +'<button class="btn btn-secondary btn-sm" data-action="FAQ_moveSection" data-sid="'+sec.id+'" data-dir="1" '+(si===FAQ_DATA.length-1?'disabled':'')+'>&#8595;</button>'
+    +'<button class="btn btn-secondary btn-sm" data-action="FAQ_showMove" data-type="section" data-sid="'+sec.id+'">Move to...</button>'
     +'<button class="btn btn-danger btn-sm" data-action="FAQ_delSection" data-sid="'+sec.id+'">Delete section</button>'
     +'</div>'
     +'<div class="faq-topic-items'+(isOpen?' open':'')+'" id="fedSecItems-'+sec.id+'">'
@@ -4365,108 +4366,137 @@ function FAQ_moveCancel(){
 function FAQ_showMoveSelect(btn, itemType, sid, tid, stid){
   // Remove any existing move selects
   document.querySelectorAll('.faq-move-inline').forEach(function(el){el.remove();});
-  
-  // Build select element
+
   var sel = document.createElement('select');
   sel.className = 'faq-move-select faq-move-inline';
   sel.style.cssText = 'font-size:11.5px;padding:2px 4px;border:1px solid var(--red);border-radius:4px;max-width:180px;margin-left:4px;background:#fff;color:var(--ink);cursor:pointer;';
-  
-  // Default option
+
   var def = document.createElement('option');
   def.value = '';
   def.textContent = 'Choose destination...';
   sel.appendChild(def);
-  
-  // Sections as topic destinations
+
+  // Group 1: As a Topic inside a Section
   var grp1 = document.createElement('optgroup');
   grp1.label = 'As a Topic → Section';
   FAQ_DATA.forEach(function(sec, i){
+    if(itemType === 'section' && sec.id === sid) return; // skip self
     var opt = document.createElement('option');
     opt.value = 't|' + sec.id;
     opt.textContent = (i+1) + '. ' + (sec.title || '(untitled)');
     grp1.appendChild(opt);
   });
-  sel.appendChild(grp1);
-  
-  // Topics as subtopic destinations
+  if(grp1.children.length) sel.appendChild(grp1);
+
+  // Group 2: As a Subtopic inside a Topic
   var grp2 = document.createElement('optgroup');
   grp2.label = 'As a Subtopic → Topic';
   FAQ_DATA.forEach(function(sec){
     (sec.topics||[]).forEach(function(t){
+      if(itemType === 'topic' && t.id === tid) return; // skip self
       var opt = document.createElement('option');
       opt.value = 'st|' + sec.id + '|' + t.id;
       opt.textContent = '[' + (sec.title||'S') + '] ' + (t.title||'(untitled)');
       grp2.appendChild(opt);
     });
   });
-  sel.appendChild(grp2);
-  
-  // On change: execute move
+  if(grp2.children.length) sel.appendChild(grp2);
+
   sel.addEventListener('change', function(){
     var val = sel.value;
     sel.remove();
     if(!val) return;
     var parts = val.split('|');
-    var moveAs = parts[0]; // 't' or 'st'
-    
-    if(itemType === 'topic'){
+    var moveAs = parts[0]; // 't' = topic, 'st' = subtopic
+
+    if(itemType === 'section'){
+      // Moving a whole section: convert to topic or subtopic
       var srcSec = FAQ_findSection(sid);
-      var topic  = FAQ_findTopic(tid);
-      if(!srcSec || !topic){ showToast('Source not found'); return; }
+      if(!srcSec){ showToast('Source not found'); return; }
+      // Collect all items from all topics in this section
+      var allTopics = (srcSec.topics||[]);
+
       if(moveAs === 't'){
+        // Each topic in the section becomes a topic in the destination section
+        // OR we merge the section as one topic with all its content
         var destSec = FAQ_findSection(parts[1]);
         if(!destSec){ showToast('Destination not found'); return; }
-        srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== tid; });
-        destSec.topics = destSec.topics || [];
-        destSec.topics.push(topic);
-        showToast('Moved to "' + (destSec.title||'section') + '" ✓');
+        // Move all topics from this section into the destination section
+        allTopics.forEach(function(t){ destSec.topics = destSec.topics||[]; destSec.topics.push(t); });
+        // Remove the section
+        FAQ_DATA = FAQ_DATA.filter(function(s){ return s.id !== sid; });
+        showToast('Section merged into "' + (destSec.title||'section') + '" ✓');
       } else {
+        // Convert entire section into a subtopic of a topic
         var destTopic = FAQ_findTopic(parts[2]);
         if(!destTopic){ showToast('Destination not found'); return; }
-        var allItems = (topic.items||[]).slice();
-        (topic.subtopics||[]).forEach(function(st){ allItems = allItems.concat(st.items||[]); });
-        var newSub = {id:topic.id, title:topic.title, _open:false, items:allItems};
-        srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== tid; });
-        destTopic.subtopics = destTopic.subtopics || [];
+        // Flatten all topics and their items into one subtopic
+        var allItems = [];
+        allTopics.forEach(function(t){
+          allItems = allItems.concat(t.items||[]);
+          (t.subtopics||[]).forEach(function(st){ allItems = allItems.concat(st.items||[]); });
+        });
+        var newSub = {id: srcSec.id, title: srcSec.title, _open: false, items: allItems};
+        destTopic.subtopics = destTopic.subtopics||[];
         destTopic.subtopics.push(newSub);
-        showToast('Moved as subtopic of "' + (destTopic.title||'topic') + '" ✓');
+        FAQ_DATA = FAQ_DATA.filter(function(s){ return s.id !== sid; });
+        showToast('Section converted to subtopic of "' + (destTopic.title||'topic') + '" ✓');
       }
-    } else {
-      var srcTopic = FAQ_findTopic(tid);
-      var st = FAQ_findSubtopic(tid, stid);
-      if(!srcTopic || !st){ showToast('Source not found'); return; }
+
+    } else if(itemType === 'topic'){
+      var srcSec2 = FAQ_findSection(sid);
+      var topic = FAQ_findTopic(tid);
+      if(!srcSec2||!topic){ showToast('Source not found'); return; }
       if(moveAs === 't'){
         var destSec2 = FAQ_findSection(parts[1]);
         if(!destSec2){ showToast('Destination not found'); return; }
-        srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== stid; });
-        var newTopic = {id:st.id, title:st.title, _open:false, items:st.items||[], subtopics:[]};
-        destSec2.topics = destSec2.topics || [];
-        destSec2.topics.push(newTopic);
-        showToast('Promoted to topic in "' + (destSec2.title||'section') + '" ✓');
+        srcSec2.topics = (srcSec2.topics||[]).filter(function(t){ return t.id !== tid; });
+        destSec2.topics = destSec2.topics||[];
+        destSec2.topics.push(topic);
+        showToast('Moved to "' + (destSec2.title||'section') + '" ✓');
       } else {
         var destTopic2 = FAQ_findTopic(parts[2]);
         if(!destTopic2){ showToast('Destination not found'); return; }
-        srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== stid; });
-        destTopic2.subtopics = destTopic2.subtopics || [];
-        destTopic2.subtopics.push(st);
-        showToast('Moved to "' + (destTopic2.title||'topic') + '" ✓');
+        var allItems2 = (topic.items||[]).slice();
+        (topic.subtopics||[]).forEach(function(st){ allItems2 = allItems2.concat(st.items||[]); });
+        var newSub2 = {id:topic.id, title:topic.title, _open:false, items:allItems2};
+        srcSec2.topics = (srcSec2.topics||[]).filter(function(t){ return t.id !== tid; });
+        destTopic2.subtopics = destTopic2.subtopics||[];
+        destTopic2.subtopics.push(newSub2);
+        showToast('Moved as subtopic of "' + (destTopic2.title||'topic') + '" ✓');
+      }
+
+    } else {
+      // subtopic
+      var srcTopic3 = FAQ_findTopic(tid);
+      var st3 = FAQ_findSubtopic(tid, stid);
+      if(!srcTopic3||!st3){ showToast('Source not found'); return; }
+      if(moveAs === 't'){
+        var destSec3 = FAQ_findSection(parts[1]);
+        if(!destSec3){ showToast('Destination not found'); return; }
+        srcTopic3.subtopics = (srcTopic3.subtopics||[]).filter(function(s){ return s.id !== stid; });
+        var newTopic3 = {id:st3.id, title:st3.title, _open:false, items:st3.items||[], subtopics:[]};
+        destSec3.topics = destSec3.topics||[];
+        destSec3.topics.push(newTopic3);
+        showToast('Promoted to topic in "' + (destSec3.title||'section') + '" ✓');
+      } else {
+        var destTopic3 = FAQ_findTopic(parts[2]);
+        if(!destTopic3){ showToast('Destination not found'); return; }
+        srcTopic3.subtopics = (srcTopic3.subtopics||[]).filter(function(s){ return s.id !== stid; });
+        destTopic3.subtopics = destTopic3.subtopics||[];
+        destTopic3.subtopics.push(st3);
+        showToast('Moved to "' + (destTopic3.title||'topic') + '" ✓');
       }
     }
+
     FAQ_save();
     FAQ_renderEditor();
   });
-  
-  // Insert after button
+
   btn.parentNode.insertBefore(sel, btn.nextSibling);
   sel.focus();
 }
 
-/* ===== INIT ===== */
-var pwInput=document.getElementById('pw-input');
-if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
-loadData();
-FAQ_load();
-FAQ_loadApiKey();
-FAQ_initDeepLinks();</script>
+;</script>
 </body>
 </html>
