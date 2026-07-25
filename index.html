@@ -4497,6 +4497,15 @@ function FAQ_showMoveSelect(btn, itemType, sid, tid, stid){
   sel.focus();
 }
 
-;</script>
+;
+
+/* ===== INIT ===== */
+var pwInput=document.getElementById('pw-input');
+if(pwInput) pwInput.addEventListener('keydown',function(e){if(e.key==='Enter')submitPassword();});
+loadData();
+FAQ_load();
+FAQ_loadApiKey();
+FAQ_initDeepLinks();
+</script>
 </body>
 </html>
