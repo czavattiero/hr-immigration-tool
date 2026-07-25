@@ -3541,12 +3541,7 @@ function FAQ_importBackup(ev){
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;
   var a=el.dataset.action;if(!a||!a.startsWith('FAQ_'))return;
-  // Block all delegation when AI importer is open
-  if(!document.getElementById('faq-ai-modal').classList.contains('hidden')) return;
-  // Allow move modal own buttons through, block everything else
-  if(!document.getElementById('faq-move-modal').classList.contains('hidden')){
-    if(a!=='FAQ_moveSetTypeBtn'&&a!=='FAQ_moveExecuteBtn'&&a!=='FAQ_moveCancelBtn') return;
-  }
+  // Block delegation when inside AI importer modal
   if(e.target.closest('#faq-ai-modal')) return;
   e.stopPropagation();
   // Collapsibles
@@ -4292,14 +4287,14 @@ function FAQ_moveExecute(){
   if(moveAs === 'topic'){
     // Move the item (topic or subtopic) into destVal section as a topic
     var destSec = FAQ_findSection(destVal);
-    if(!destSec){ alert('Could not find destination section.'); return; }
+    if(!destSec){ FAQ_moveCancel(); alert('Could not find destination section.'); return; }
 
     if(FAQ_MOVE_STATE.type === 'topic'){
       // Move topic → topic in another section
       var srcSec = FAQ_findSection(FAQ_MOVE_STATE.sid);
-      if(!srcSec) return;
+      if(!srcSec){ FAQ_moveCancel(); return; }
       var topic = FAQ_findTopic(FAQ_MOVE_STATE.tid);
-      if(!topic) return;
+      if(!topic){ FAQ_moveCancel(); return; }
       srcSec.topics = (srcSec.topics||[]).filter(function(t){ return t.id !== FAQ_MOVE_STATE.tid; });
       if(!destSec.topics) destSec.topics = [];
       destSec.topics.push(topic);
@@ -4308,9 +4303,9 @@ function FAQ_moveExecute(){
     } else {
       // Move subtopic → becomes a topic in a section
       var srcTopic = FAQ_findTopic(FAQ_MOVE_STATE.tid);
-      if(!srcTopic) return;
+      if(!srcTopic){ FAQ_moveCancel(); return; }
       var st = FAQ_findSubtopic(FAQ_MOVE_STATE.tid, FAQ_MOVE_STATE.stid);
-      if(!st) return;
+      if(!st){ FAQ_moveCancel(); return; }
       srcTopic.subtopics = (srcTopic.subtopics||[]).filter(function(s){ return s.id !== FAQ_MOVE_STATE.stid; });
       // Convert subtopic to topic format
       var newTopic = {id: st.id, title: st.title, _open: false, items: st.items||[], subtopics:[]};
@@ -4323,14 +4318,14 @@ function FAQ_moveExecute(){
     // Move item into a topic as a subtopic
     var parts = destVal.split('||');
     var destTopic = FAQ_findTopic(parts[1]);
-    if(!destTopic){ alert('Could not find destination topic.'); return; }
+    if(!destTopic){ FAQ_moveCancel(); alert('Could not find destination topic.'); return; }
 
     if(FAQ_MOVE_STATE.type === 'topic'){
       // Move topic → becomes a subtopic in another topic
       var srcSec2 = FAQ_findSection(FAQ_MOVE_STATE.sid);
-      if(!srcSec2) return;
+      if(!srcSec2){ FAQ_moveCancel(); return; }
       var topic2 = FAQ_findTopic(FAQ_MOVE_STATE.tid);
-      if(!topic2) return;
+      if(!topic2){ FAQ_moveCancel(); return; }
       srcSec2.topics = (srcSec2.topics||[]).filter(function(t){ return t.id !== FAQ_MOVE_STATE.tid; });
       // Convert topic to subtopic format (items only, subtopics become items)
       var allItems = (topic2.items||[]);
@@ -4343,9 +4338,9 @@ function FAQ_moveExecute(){
     } else {
       // Move subtopic → subtopic in another topic
       var srcTopic2 = FAQ_findTopic(FAQ_MOVE_STATE.tid);
-      if(!srcTopic2) return;
+      if(!srcTopic2){ FAQ_moveCancel(); return; }
       var st2 = FAQ_findSubtopic(FAQ_MOVE_STATE.tid, FAQ_MOVE_STATE.stid);
-      if(!st2) return;
+      if(!st2){ FAQ_moveCancel(); return; }
       srcTopic2.subtopics = (srcTopic2.subtopics||[]).filter(function(s){ return s.id !== FAQ_MOVE_STATE.stid; });
       if(!destTopic.subtopics) destTopic.subtopics = [];
       destTopic.subtopics.push(st2);
