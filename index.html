@@ -3250,7 +3250,7 @@ function FAQ_buildQABlock(sid,tid,stid,item){
     +'<option value="freetext"'+(item.type==='freetext'?' selected':'')+'>Free text</option>'
     +'<option value="dropdown"'+(item.type==='dropdown'?' selected':'')+'>Dropdown</option>'
     +'</select>'
-    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delItem" data-sid="'+sid+'" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'">Delete</button>'
+    +'<button class="btn btn-danger btn-sm" data-action="FAQ_delItem" data-sid="'+sid+'" data-tid="'+tid+'" data-stid="'+(stid||'')+'" data-iid="'+item.id+'" onclick="event.stopPropagation();FAQ_delItem(this.dataset.sid,this.dataset.tid,this.dataset.stid||null,this.dataset.iid)">Delete</button>'
     +'</div>'
     // Body (collapsible)
     +'<div class="faq-qa-body'+(isOpen?' open':'')+'" id="fedqabody-'+item.id+'">'
