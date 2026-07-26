@@ -2918,7 +2918,7 @@ function FAQ_load(){
                 items:t.items||[]};
             })}];
           }
-          FAQ_DATA=d;FAQ_LAST_HASH=row.content.length+'_'+row.content.substring(0,50);
+          FAQ_DATA=FAQ_normalizeSections(d);FAQ_LAST_HASH=row.content.length+'_'+row.content.substring(0,50);
         }
       }catch(e){}
     }
@@ -2941,7 +2941,7 @@ function FAQ_startPolling(){
       if(!row||!row.content)return;
       var h=row.content.length+'_'+row.content.substring(0,50);
       if(h!==FAQ_LAST_HASH){
-        try{var d=JSON.parse(row.content);if(Array.isArray(d)){FAQ_DATA=d;FAQ_LAST_HASH=h;FAQ_render();
+        try{var d=JSON.parse(row.content);if(Array.isArray(d)){FAQ_DATA=FAQ_normalizeSections(d);FAQ_LAST_HASH=h;FAQ_render();
           if(document.getElementById('page-faq-editor').classList.contains('active'))FAQ_renderEditor();
           showToast('FAQ updated by another editor');}}catch(e){}
       }
@@ -2954,6 +2954,57 @@ function FAQ_sid(){return 'sec'+Date.now()+Math.random().toString(36).slice(2,5)
 function FAQ_tid(){return 'ft'+Date.now()+Math.random().toString(36).slice(2,5);}
 function FAQ_stid(){return 'fs'+Date.now()+Math.random().toString(36).slice(2,5);}
 function FAQ_qid(){return 'fq'+Date.now()+Math.random().toString(36).slice(2,5);}
+function FAQ_normalizeSections(sections){
+  return (sections||[]).map(function(sec){
+    sec=sec||{};
+    sec.id=(sec.id===undefined||sec.id===null||sec.id==='')?FAQ_sid():String(sec.id);
+    sec.title=sec.title||'';
+    sec._open=sec._open!==false;
+    sec.topics=Array.isArray(sec.topics)?sec.topics:[];
+    sec.topics=sec.topics.map(function(t){
+      t=t||{};
+      t.id=(t.id===undefined||t.id===null||t.id==='')?FAQ_tid():String(t.id);
+      t.title=t.title||'';
+      t._open=t._open!==false;
+      t.items=Array.isArray(t.items)?t.items:[];
+      t.subtopics=Array.isArray(t.subtopics)?t.subtopics:[];
+      t.items=t.items.map(function(it){
+        it=it||{};
+        it.id=(it.id===undefined||it.id===null||it.id==='')?FAQ_qid():String(it.id);
+        it.type=it.type||'freetext';
+        it.question=it.question||'';
+        it.answer=it.answer||'';
+        it._open=it._open!==false;
+        it._mediaOpen=it._mediaOpen===true;
+        it.options=Array.isArray(it.options)?it.options:[];
+        it.media=Array.isArray(it.media)?it.media:[];
+        return it;
+      });
+      t.subtopics=t.subtopics.map(function(st){
+        st=st||{};
+        st.id=(st.id===undefined||st.id===null||st.id==='')?FAQ_stid():String(st.id);
+        st.title=st.title||'';
+        st._open=st._open===true;
+        st.items=Array.isArray(st.items)?st.items:[];
+        st.items=st.items.map(function(it){
+          it=it||{};
+          it.id=(it.id===undefined||it.id===null||it.id==='')?FAQ_qid():String(it.id);
+          it.type=it.type||'freetext';
+          it.question=it.question||'';
+          it.answer=it.answer||'';
+          it._open=it._open!==false;
+          it._mediaOpen=it._mediaOpen===true;
+          it.options=Array.isArray(it.options)?it.options:[];
+          it.media=Array.isArray(it.media)?it.media:[];
+          return it;
+        });
+        return st;
+      });
+      return t;
+    });
+    return sec;
+  });
+}
 
 /* ── Search ── */
 function FAQ_search(term){FAQ_SEARCH_TERM=term.trim().toLowerCase();FAQ_render();}
@@ -3532,7 +3583,7 @@ function FAQ_importBackup(ev){
             items:t.items||[]};
         })}];
       }
-      FAQ_DATA=d;FAQ_save();FAQ_renderEditor();FAQ_render();showToast('FAQ imported');
+      FAQ_DATA=FAQ_normalizeSections(d);FAQ_save();FAQ_renderEditor();FAQ_render();showToast('FAQ imported');
     }catch(err){alert('Import failed.');}
   };
   r.readAsText(f);ev.target.value='';
@@ -4047,7 +4098,7 @@ function FAQ_aiShowPreview(sections){
 function FAQ_aiConfirm(){
   if(!FAQ_AI_pending)return;
   var added=FAQ_AI_pending.length;
-  FAQ_DATA=FAQ_DATA.concat(FAQ_AI_pending);
+  FAQ_DATA=FAQ_normalizeSections(FAQ_DATA.concat(FAQ_AI_pending));
   FAQ_save();FAQ_renderEditor();FAQ_render();
   FAQ_aiCancel();
   showToast(added+' new section(s) added to FAQ ✓');
