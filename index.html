@@ -4193,7 +4193,9 @@ function FAQ_copyLink(type,id){
 function FAQ_initDeepLinks(){
   var hash=window.location.hash;
   if(hash&&hash.startsWith('#faq')){
-    // Wait for FAQ_load to complete
+    // Switch to FAQ tab immediately (no flash of user view)
+    switchTab('faq',true);
+    // Then wait for FAQ_DATA to load before scrolling to section/topic
     var attempts=0;
     var check=setInterval(function(){
       attempts++;
