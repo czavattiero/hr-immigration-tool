@@ -1871,7 +1871,9 @@ function toggleDocLib(){var wrap=document.getElementById('doc-lib-body-wrap'),ar
 /* ===== ACCORDION ===== */
 var openAccordionId=null;
 var openDocRuleId=null;
+/* Cancels any pending animation frame queued for a block-body-wrap element. */
 function cancelBlockRaf(bw){if(bw._rafId){cancelAnimationFrame(bw._rafId);bw._rafId=null;}}
+/* Forces a browser reflow by reading offsetHeight, ensuring pending style changes are applied immediately. */
 function forceReflow(el){void el.offsetHeight;}
 function toggleAccordion(sid){
   document.querySelectorAll('.editor-block').forEach(function(block){
