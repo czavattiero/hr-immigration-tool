@@ -1872,7 +1872,7 @@ function toggleDocLib(){var wrap=document.getElementById('doc-lib-body-wrap'),ar
 var openAccordionId=null;
 var openDocRuleId=null;
 function cancelBlockRaf(bw){if(bw._rafId){cancelAnimationFrame(bw._rafId);bw._rafId=null;}}
-function forceReflow(el){return el.offsetHeight;}
+function forceReflow(el){void el.offsetHeight;}
 function toggleAccordion(sid){
   document.querySelectorAll('.editor-block').forEach(function(block){
     var bsid=block.id.replace('block-','');
@@ -1884,8 +1884,9 @@ function toggleAccordion(sid){
       if(!isOpen){
         bw.style.maxHeight='0';
         bw._rafId=requestAnimationFrame(function(){
-          if(bw.isConnected) bw.style.maxHeight=bw.scrollHeight+'px';
           bw._rafId=null;
+          if(!bw.isConnected) return;
+          bw.style.maxHeight=bw.scrollHeight+'px';
         });
       } else {
         bw.style.maxHeight='';
