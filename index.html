@@ -150,7 +150,7 @@ input.q-free-input{min-height:unset;resize:none}
 .doc-lib-arrow{font-size:12px;color:var(--ink3);transition:transform .25s}
 .doc-lib-arrow.open{transform:rotate(180deg)}
 .doc-lib-body-wrap{max-height:0;overflow:hidden;transition:max-height .35s ease}
-.doc-lib-body-wrap.open{max-height:2000px;transition:max-height .5s ease}
+.doc-lib-body-wrap.open{max-height:4000px;transition:max-height .5s ease}
 .doc-lib-body{padding:14px 16px}
 .doc-lib-col-hdr{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
 .doc-lib-row{display:grid;grid-template-columns:1.2fr 1.5fr 1.5fr auto;gap:8px;align-items:center;margin-bottom:9px;padding:9px 10px;background:var(--paper);border:1px solid var(--border);border-radius:7px}
@@ -205,7 +205,7 @@ input.q-free-input{min-height:unset;resize:none}
 
 /* Accordion body — animated open/close */
 .block-body-wrap{max-height:0;overflow:hidden;transition:max-height .3s ease}
-.block-body-wrap.open{max-height:4000px;transition:max-height .5s ease}
+.block-body-wrap.open{max-height:9999px;transition:max-height .5s ease}
 .block-body{padding:16px;background:#fff;border-top:1px solid rgba(80,10,10,.08)}
 .field-row{margin-bottom:14px}
 .field-row:last-child{margin-bottom:0}
@@ -400,7 +400,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
 .doc-rule-arrow{font-size:12px;color:var(--ink3);transition:transform .25s}
 .doc-rule-hdr.open .doc-rule-arrow{transform:rotate(180deg)}
 .doc-rule-body-wrap{max-height:0;overflow:hidden;transition:max-height .3s ease}
-.doc-rule-body-wrap.open{max-height:4000px;transition:max-height .5s ease}
+.doc-rule-body-wrap.open{max-height:9999px;transition:max-height .5s ease}
 .doc-rule-body{padding:16px;background:#fff;border-top:1px solid rgba(80,10,10,.08)}
 .doc-rule-label-row{margin-bottom:12px}
 .doc-rule-docs{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
@@ -1876,8 +1876,12 @@ function toggleAccordion(sid){
     var bsid=block.id.replace('block-','');
     var hdr=block.querySelector('.block-hdr'),bw=block.querySelector('.block-body-wrap');
     if(!hdr||!bw) return;
-    if(bsid===sid){var isOpen=bw.classList.contains('open');bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);openAccordionId=isOpen?null:sid;}
-    else{bw.classList.remove('open');hdr.classList.remove('open');}
+    if(bsid===sid){var isOpen=bw.classList.contains('open');
+      if(!isOpen) bw.style.maxHeight=bw.scrollHeight+'px';
+      bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);
+      if(isOpen) bw.style.maxHeight='';
+      openAccordionId=isOpen?null:sid;}
+    else{bw.classList.remove('open');bw.style.maxHeight='';hdr.classList.remove('open');}
   });
 }
 function openAccordion(sid){
@@ -1886,6 +1890,8 @@ function openAccordion(sid){
     var hdr=block.querySelector('.block-hdr'),bw=block.querySelector('.block-body-wrap');
     if(!hdr||!bw) return;
     var open=(bsid===sid);bw.classList.toggle('open',open);hdr.classList.toggle('open',open);
+    if(open) bw.style.maxHeight=bw.scrollHeight+'px';
+    else bw.style.maxHeight='';
   });
   openAccordionId=sid;
 }
