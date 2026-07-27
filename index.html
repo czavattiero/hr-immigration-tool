@@ -1885,7 +1885,7 @@ function toggleAccordion(sid){
         bw.style.maxHeight='0';
         bw._rafId=requestAnimationFrame(function(){
           bw._rafId=null;
-          if(!bw.isConnected) return;
+          if(!bw.isConnected||!bw.classList.contains('open')) return;
           bw.style.maxHeight=bw.scrollHeight+'px';
         });
       } else {
