@@ -1880,7 +1880,7 @@ function toggleAccordion(sid){
       bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);
       if(!isOpen){
         bw.style.maxHeight='0';
-        (function(el){requestAnimationFrame(function(){el.style.maxHeight=el.scrollHeight+'px';});})(bw);
+        requestAnimationFrame(function(){bw.style.maxHeight=bw.scrollHeight+'px';});
       } else {
         bw.style.maxHeight='';
       }
@@ -1898,7 +1898,7 @@ function openAccordion(sid){
       /* Set max-height without animation — called after re-renders to restore open state */
       bw.style.transition='none';
       bw.style.maxHeight=bw.scrollHeight+'px';
-      bw.offsetHeight; /* force reflow to commit styles before re-enabling transition */
+      bw.offsetHeight; /* trigger layout flush before re-enabling transition */
       bw.style.transition='';
     } else {
       bw.style.maxHeight='';
