@@ -4703,9 +4703,17 @@ function EVL_build(){
   EVL_employeeName = myRows[0]['Name'] || '';
 
   // Group by Empl Record, find hire/term pairs
+  // Find Empl Record column (varies by export)
+  var emplRecKey = null;
+  var allKeys2 = Object.keys(myRows[0]||{});
+  ['Empl Record','EmplRecord','Empl Rcd','Empl Rec','Record'].forEach(function(k){
+    if(!emplRecKey && allKeys2.indexOf(k)>=0) emplRecKey = k;
+  });
+  if(!emplRecKey) emplRecKey = allKeys2.find(function(k){ return k.toLowerCase().replace(/\s/g,'').indexOf('emplrec') >= 0 || k.toLowerCase().replace(/\s/g,'').indexOf('emplrecord') >= 0; });
+
   var records = {};
   myRows.forEach(function(r){
-    var rec = String(r['Empl Record']||'0').trim();
+    var rec = String((emplRecKey ? r[emplRecKey] : null)||'0').trim();
     if(!records[rec]) records[rec] = [];
     records[rec].push(r);
   });
@@ -4715,11 +4723,20 @@ function EVL_build(){
     var recs = records[recKey];
     recs.sort(function(a,b){ return (a['Eff Date']||'').localeCompare(b['Eff Date']||''); });
 
-    var hire = recs.find(function(r){ return r['Action'] === 'Hire' || r['Action'] === 'Rehire' || r['Action'] === 'Transfer' || r['Action'] === 'Data Change' || r['Action'] === 'Pay Rate Change' || !r['Action']; });
+    // Find action column (varies)
+    var actKey = null;
+    var rKeys = Object.keys(recs[0]||{});
+    ['Action','Actn','ACTION'].forEach(function(k){ if(!actKey && rKeys.indexOf(k)>=0) actKey=k; });
+
+    var hire = recs.find(function(r){
+      var act = actKey ? r[actKey] : '';
+      return act === 'Hire' || act === 'Rehire' || act === 'Transfer' || act === 'Data Change' || act === 'Pay Rate Change' || !act;
+    });
     if(!hire) hire = recs[0];
-    var term = recs.slice().reverse().find(function(r){ return r['Action'] === 'Termination'; });
+    var term = recs.slice().reverse().find(function(r){ var act = actKey ? r[actKey] : ''; return act === 'Termination'; });
     if(!hire) return;
-    if(term && term['Reason'] === 'Appointment Cancelled') return;
+    var reasonKey = rKeys.indexOf('Reason') >= 0 ? 'Reason' : (rKeys.indexOf('Actn Reason') >= 0 ? 'Actn Reason' : null);
+    if(term && reasonKey && term[reasonKey] === 'Appointment Cancelled') return;
 
     var emplType = hire['Empl Type'];
     var startDate = hire['Last Start'];
@@ -4747,7 +4764,14 @@ function EVL_build(){
     });
   });
 
-  if(!EVL_periods.length){ if(errEl) errEl.textContent = 'Could not extract employment periods for Employee ID: ' + empId; return; }
+  if(!EVL_periods.length){
+    // Debug: show what we found to help diagnose
+    var debugCols = Object.keys(myRows[0] || {}).slice(0,10).join(', ');
+    var debugActions = [...new Set(myRows.map(function(r){ return String(r['Action']||r['Actn']||'(no action)'); }))].join(', ');
+    var debugRecords = [...new Set(myRows.map(function(r){ return String(r['Empl Record']||r['EmplRecord']||r['Empl Rcd']||'?'); }))].join(', ');
+    if(errEl) errEl.textContent = 'Could not extract employment periods. Rows found: ' + myRows.length + '. Actions: ' + debugActions + '. Records: ' + debugRecords + '. Columns: ' + debugCols;
+    return;
+  }
 
   EVL_renderPreview();
 }
