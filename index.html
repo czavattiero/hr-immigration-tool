@@ -1194,7 +1194,7 @@ function conditionsMet(s){
     /* unresolved ref: skip in AND (pass), exclude in OR (no match) */
     if(!ref) return !useOr;
     if(ref.type==='dynamic'){var indices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);return indices.length>0&&indices.indexOf(answers[c.sectionId])!==-1;}
-    if(ref.type==='grouped'&&c.gdi!=null) return answers[c.sectionId+'__'+c.gdi]===c.value;
+    if(ref.type==='grouped'){var gdi=c.gdi!=null?c.gdi:0;var condVals=Array.isArray(c.values)?c.values:(c.value!=null&&c.value!==''?[c.value]:[]);var ans=answers[c.sectionId+'__'+gdi];return condVals.length>0&&ans!=null&&condVals.indexOf(ans)!==-1;}
     return !useOr;
   });
 }
@@ -1968,25 +1968,44 @@ function rebuildAllDocPickerLists(){
 
 /* ===== BLOCK BUILDERS ===== */
 function buildConditionsUI(s){
-  var dynSections=DATA.filter(function(ds){return ds.id!==s.id&&ds.type==='dynamic';});
-  if(dynSections.length===0) return '';
+  var allSections=DATA.filter(function(ds){return ds.id!==s.id&&(ds.type==='dynamic'||ds.type==='grouped');});
+  if(allSections.length===0) return '';
   var conds=s.conditions||[];
   var op=s.conditionOperator||'and';
   var opLabel=op==='or'?'OR':'AND';
   var rows=conds.map(function(c,ci){
-    var secOpts=dynSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
+    var secOpts=allSections.map(function(ds){return '<option value="'+escA(ds.id)+'"'+(c.sectionId===ds.id?' selected':'')+'>'+esc(ds.label||(ds.question&&ds.question.substring(0,40))||ds.id)+'</option>';}).join('');
     var refSec=DATA.find(function(ds){return ds.id===c.sectionId;});
-    var optOpts='';
-    var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
-    if(refSec&&refSec.options) optOpts+=refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join('');
-    var multiSize=refSec&&refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
+    var answerHtml='';
+    if(refSec&&refSec.type==='dynamic'){
+      var selectedIndices=Array.isArray(c.optionIndices)?c.optionIndices:(c.optionIndex!=null?[c.optionIndex]:[]);
+      var optOpts=refSec.options?refSec.options.map(function(o,oi){return '<option value="'+oi+'"'+(selectedIndices.indexOf(oi)>=0?' selected':'')+'>'+esc(o.label||'Option '+(oi+1))+'</option>';}).join(''):'';
+      var multiSize=refSec.options&&refSec.options.length>1?Math.min(refSec.options.length,5):2;
+      answerHtml='<span class="condition-label">=</span>'
+        +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setCondOpt" data-sid="'+escA(s.id)+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>';
+    } else if(refSec&&refSec.type==='grouped'){
+      var drops=refSec.dropdowns||[];
+      var gdiSel=c.gdi!=null&&c.gdi<drops.length?c.gdi:0;
+      var gdiOpts=drops.map(function(gd,gdi){return '<option value="'+gdi+'"'+(gdiSel===gdi?' selected':'')+'>'+esc(gd.question||'Dropdown '+(gdi+1))+'</option>';}).join('');
+      var selDrop=drops[gdiSel]||null;
+      var items=selDrop?getDropdownNames(selDrop):[];
+      var selectedValues=Array.isArray(c.values)?c.values:(c.value!=null&&c.value!==''?[c.value]:[]);
+      var itemOpts=items.map(function(nm){return '<option value="'+escA(nm)+'"'+(selectedValues.indexOf(nm)>=0?' selected':'')+'>'+esc(nm)+'</option>';}).join('');
+      var itemMultiSize=items.length>1?Math.min(items.length,5):2;
+      answerHtml=(drops.length>1?'<span class="condition-label">&rarr;</span>'
+        +'<select class="condition-select" data-action="setCondGdi" data-sid="'+escA(s.id)+'" data-ci="'+ci+'">'+gdiOpts+'</select>':'')
+        +'<span class="condition-label">=</span>'
+        +'<select class="condition-select" multiple size="'+itemMultiSize+'" data-action="setCondVal" data-sid="'+escA(s.id)+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+itemOpts+'</select>';
+    } else {
+      answerHtml='<span class="condition-label">=</span>'
+        +'<select class="condition-select" disabled><option>-- select question first --</option></select>';
+    }
     var sep=ci>0?'<div class="condition-and-label">'+opLabel+'</div>':'';
     return sep
       +'<div class="condition-row">'
       +'<span class="condition-label">If</span>'
       +'<select class="condition-select" data-action="setCondSec" data-sid="'+escA(s.id)+'" data-ci="'+ci+'"><option value="">-- select question --</option>'+secOpts+'</select>'
-      +'<span class="condition-label">=</span>'
-      +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setCondOpt" data-sid="'+escA(s.id)+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>'
+      +answerHtml
       +'<button class="del-cond-btn" data-action="delCondition" data-sid="'+escA(s.id)+'" data-ci="'+ci+'">&times;</button>'
       +'</div>';
   }).join('');
@@ -2456,12 +2475,32 @@ function setCondSec(sid,ci,refSid){
   s.conditions[ci].sectionId=refSid;
   s.conditions[ci].optionIndices=[];
   delete s.conditions[ci].optionIndex;
+  delete s.conditions[ci].gdi;
+  delete s.conditions[ci].value;
+  delete s.conditions[ci].values;
+  if(refSid){
+    var ref=DATA.find(function(r){return r.id===refSid;});
+    if(ref&&ref.type==='grouped'&&ref.dropdowns&&ref.dropdowns.length>0) s.conditions[ci].gdi=0;
+  }
   saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
 }
 function setCondOpt(sid,ci,optIndices){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
   s.conditions[ci].optionIndices=Array.isArray(optIndices)?optIndices:[];
   delete s.conditions[ci].optionIndex;
+  saveData();
+}
+function setCondGdi(sid,ci,gdi){
+  var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
+  s.conditions[ci].gdi=parseInt(gdi,10);
+  delete s.conditions[ci].value;
+  delete s.conditions[ci].values;
+  saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
+}
+function setCondVal(sid,ci,selectedValues){
+  var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
+  s.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=='';}):[];
+  delete s.conditions[ci].value;
   saveData();
 }
 function setCondOperator(sid,op){
@@ -2812,6 +2851,10 @@ document.addEventListener('change',function(e){
   if(cs){setCondSec(cs.dataset.sid,parseInt(cs.dataset.ci),cs.value);return;}
   var co=e.target.closest('select[data-action="setCondOpt"]');
   if(co){var selected=Array.prototype.filter.call(co.options,function(o){return o.selected;}).map(function(o){return parseInt(o.value);});setCondOpt(co.dataset.sid,parseInt(co.dataset.ci),selected);return;}
+  var scg=e.target.closest('select[data-action="setCondGdi"]');
+  if(scg){setCondGdi(scg.dataset.sid,parseInt(scg.dataset.ci),scg.value);return;}
+  var scv=e.target.closest('select[data-action="setCondVal"]');
+  if(scv){var selectedVals=Array.prototype.filter.call(scv.options,function(o){return o.selected;}).map(function(o){return o.value;});setCondVal(scv.dataset.sid,parseInt(scv.dataset.ci),selectedVals);return;}
   var srcs=e.target.closest('select[data-action="setRuleCondSec"]');
   if(srcs){setRuleCondSec(parseInt(srcs.dataset.ri),parseInt(srcs.dataset.ci),srcs.value);return;}
   var srco=e.target.closest('select[data-action="setRuleCondOpt"]');
