@@ -1877,15 +1877,18 @@ function toggleAccordion(sid){
     var hdr=block.querySelector('.block-hdr'),bw=block.querySelector('.block-body-wrap');
     if(!hdr||!bw) return;
     if(bsid===sid){var isOpen=bw.classList.contains('open');
+      if(bw._rafId){cancelAnimationFrame(bw._rafId);bw._rafId=null;}
       bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);
       if(!isOpen){
         bw.style.maxHeight='0';
-        requestAnimationFrame(function(){bw.style.maxHeight=bw.scrollHeight+'px';});
+        bw._rafId=requestAnimationFrame(function(){bw.style.maxHeight=bw.scrollHeight+'px';bw._rafId=null;});
       } else {
         bw.style.maxHeight='';
       }
       openAccordionId=isOpen?null:sid;}
-    else{bw.classList.remove('open');bw.style.maxHeight='';hdr.classList.remove('open');}
+    else{
+      if(bw._rafId){cancelAnimationFrame(bw._rafId);bw._rafId=null;}
+      bw.classList.remove('open');bw.style.maxHeight='';hdr.classList.remove('open');}
   });
 }
 function openAccordion(sid){
@@ -1898,7 +1901,8 @@ function openAccordion(sid){
       /* Set max-height without animation — called after re-renders to restore open state */
       bw.style.transition='none';
       bw.style.maxHeight=bw.scrollHeight+'px';
-      bw.offsetHeight; /* trigger layout flush before re-enabling transition */
+      bw.offsetHeight;       /* trigger layout flush to ensure maxHeight is applied before re-enabling transition,
+         preventing unwanted animation */
       bw.style.transition='';
     } else {
       bw.style.maxHeight='';
