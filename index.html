@@ -4639,11 +4639,22 @@ function EVL_parseFile(file, kind){
     try{
       var wb = XLSX.read(e.target.result, {type:'array'});
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      // Scan up to 20 rows to find the real header row (skip metadata rows at top)
+      var raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      var headerRowIdx = 0;
+      var emplidCandidates = ['emplid','employeeid','empid'];
+      for(var ri = 0; ri < Math.min(raw.length, 20); ri++){
+        var rowVals = raw[ri].map(function(v){ return String(v||'').replace(/\s/g,'').toLowerCase(); });
+        if(rowVals.some(function(v){ return emplidCandidates.indexOf(v) >= 0; })){
+          headerRowIdx = ri;
+          break;
+        }
+      }
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:'', range: headerRowIdx});
       if(kind === 'job'){ EVL_jobRows = rows; }
       else { EVL_timeRows = rows; }
       var statusEl = document.getElementById(kind === 'job' ? 'evl-job-status' : 'evl-time-status');
-      if(statusEl) statusEl.textContent = file.name + ' loaded \u2713';
+      if(statusEl) statusEl.textContent = file.name + ' loaded \u2713' + (headerRowIdx > 0 ? ' (headers on row '+(headerRowIdx+1)+')' : '');
     } catch(err){
       if(errEl) errEl.textContent = 'Could not read file: ' + err.message;
     }
