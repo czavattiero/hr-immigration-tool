@@ -1209,7 +1209,10 @@ function renderIntake(){
   /* clear answers for sections whose conditions are not met,
      but preserve the position-title answer when the active output needs it */
   var _needsPositionTitle=hasPositionTitleInActiveOutputs();
-  function shouldClearAnswers(s){return !conditionsMet(s)&&!(isPositionTitleSection(s)&&_needsPositionTitle);}
+  function shouldClearAnswers(s){
+    if(isPositionTitleSection(s)&&_needsPositionTitle) return false;
+    return !conditionsMet(s);
+  }
   active.forEach(function(s){if(shouldClearAnswers(s)) clearSectionAnswers(s);});
   var banner=document.getElementById('restore-banner');
   if(banner)banner.style.display=active.length===0?'block':'none';
