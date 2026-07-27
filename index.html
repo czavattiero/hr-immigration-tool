@@ -628,33 +628,15 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
         <input type="text" id="evl-empl-id" placeholder="e.g. 30072157" style="display:block;margin-top:6px;padding:8px 10px;border:1.5px solid var(--border2,#ccc);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:220px">
       </label>
 
-      <button class="btn btn-secondary" id="evl-build-btn" onclick="EVL_buildPreview()" style="width:fit-content">Build preview table</button>
+      <button class="btn btn-secondary" id="evl-build-btn" onclick="EVL_build()" style="width:fit-content">Build preview table</button>
     </div>
 
     <div id="evl-preview-wrap" style="display:none">
       <p style="font-size:12.5px;color:var(--ink3,#888);margin-bottom:8px">
         Click any cell to edit it. The Group Employer Benefit Plan Eligibility column is left blank &mdash; please fill it in manually before downloading.
       </p>
-      <div style="overflow-x:auto">
-        <table id="evl-preview-table" style="border-collapse:collapse;width:100%;font-size:12px">
-          <thead>
-            <tr style="background:#f2f2f2">
-              <th style="border:1px solid #ccc;padding:6px">Position</th>
-              <th style="border:1px solid #ccc;padding:6px">NOC</th>
-              <th style="border:1px solid #ccc;padding:6px">Faculty</th>
-              <th style="border:1px solid #ccc;padding:6px">Department</th>
-              <th style="border:1px solid #ccc;padding:6px">Employment Status</th>
-              <th style="border:1px solid #ccc;padding:6px">Standard Hours/Week</th>
-              <th style="border:1px solid #ccc;padding:6px">Start Date</th>
-              <th style="border:1px solid #ccc;padding:6px">End Date</th>
-              <th style="border:1px solid #ccc;padding:6px">Salary</th>
-              <th style="border:1px solid #ccc;padding:6px">Group Benefit Plan Eligibility</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <button class="btn btn-secondary" id="evl-download-btn" onclick="EVL_generateDocx()" style="margin-top:16px">Download .docx</button>
+      <div id="evl-preview" style="overflow-x:auto"></div>
+      <button class="btn btn-secondary" id="evl-download-btn" onclick="EVL_download()" style="margin-top:16px">Download .docx</button>
     </div>
     <span id="evl-error" style="display:block;color:#b91c1c;font-size:13px;margin-top:10px"></span>
   </div>
@@ -4631,14 +4613,14 @@ function EVL_init(){
   if(jf && !jf._evlInit){ jf._evlInit=true; jf.addEventListener('change', function(){ EVL_parseFile(this.files[0],'job'); }); }
   if(tf && !tf._evlInit){ tf._evlInit=true; tf.addEventListener('change', function(){ EVL_parseFile(this.files[0],'time'); }); }
   // Drag and drop
-  ['evl-job-drop','evl-time-drop'].forEach(function(id){
+  ['evl-job-drop-zone','evl-time-drop-zone'].forEach(function(id){
     var zone = document.getElementById(id);
     if(!zone || zone._evlInit) return; zone._evlInit = true;
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', function(e){
       e.preventDefault(); zone.classList.remove('drag-over');
-      var kind = id === 'evl-job-drop' ? 'job' : 'time';
+      var kind = id === 'evl-job-drop-zone' ? 'job' : 'time';
       EVL_parseFile(e.dataTransfer.files[0], kind);
     });
   });
@@ -4660,7 +4642,8 @@ function EVL_parseFile(file, kind){
       var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       if(kind === 'job'){ EVL_jobRows = rows; }
       else { EVL_timeRows = rows; }
-      document.getElementById('evl-file-status-'+(kind==='job'?'job':'time')).textContent = file.name + ' loaded \u2713';
+      var statusEl = document.getElementById(kind === 'job' ? 'evl-job-status' : 'evl-time-status');
+      if(statusEl) statusEl.textContent = file.name + ' loaded \u2713';
     } catch(err){
       if(errEl) errEl.textContent = 'Could not read file: ' + err.message;
     }
@@ -4671,7 +4654,7 @@ function EVL_parseFile(file, kind){
 function EVL_build(){
   var errEl = document.getElementById('evl-error');
   if(errEl) errEl.textContent = '';
-  var empId = (document.getElementById('evl-emp-id').value || '').trim();
+  var empId = (document.getElementById('evl-empl-id').value || '').trim();
   if(!empId){ if(errEl) errEl.textContent = 'Please enter an Employee ID.'; return; }
   if(!EVL_jobRows.length){ if(errEl) errEl.textContent = 'Please upload the job summary spreadsheet.'; return; }
 
@@ -4732,8 +4715,10 @@ function EVL_build(){
 }
 
 function EVL_renderPreview(){
+  var wrap = document.getElementById('evl-preview-wrap');
   var container = document.getElementById('evl-preview');
   if(!container) return;
+  if(wrap) wrap.style.display = '';
   container.innerHTML = '';
 
   var table = document.createElement('table');
@@ -4746,6 +4731,7 @@ function EVL_renderPreview(){
     var td = document.createElement('td');
     td.style.cssText = 'border:1px solid #ccc;padding:6px 8px;vertical-align:top;' + (bold?'font-weight:600;background:#f5f5f5':'');
     td.textContent = text;
+    if(!bold) td.contentEditable = 'true';
     return td;
   }
 
@@ -4823,10 +4809,6 @@ function EVL_renderPreview(){
   warn.style.cssText = 'background:#fff8ed;border:1px solid #e5a020;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:12px;color:#7a5000';
   warn.innerHTML = '<strong>Please always confirm the information entered in the Word document against PeopleSoft, as the reports may not include the most up-to-date information.</strong>';
   container.appendChild(warn);
-
-  // Show download button
-  var btn = document.getElementById('evl-download-btn');
-  if(btn) btn.style.display = 'inline-block';
 }
 
 function EVL_formatDate(d){
