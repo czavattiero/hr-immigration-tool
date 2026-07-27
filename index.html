@@ -4659,8 +4659,15 @@ function EVL_build(){
   if(!EVL_jobRows.length){ if(errEl) errEl.textContent = 'Please upload the job summary spreadsheet.'; return; }
 
   // Group rows by employee ID
-  var myRows = EVL_jobRows.filter(function(r){ return String(r['Emplid']||'').trim() === empId; });
-  if(!myRows.length){ if(errEl) errEl.textContent = 'No records found for Employee ID: ' + empId; return; }
+  // Find the Emplid column name (PeopleSoft exports vary: Emplid, EmplID, EMPLID, Empl ID)
+  var emplidKey = null;
+  if(EVL_jobRows.length > 0){
+    var keys = Object.keys(EVL_jobRows[0]);
+    emplidKey = keys.find(function(k){ return k.replace(/\s/g,'').toLowerCase() === 'emplid'; });
+  }
+  if(!emplidKey){ if(errEl) errEl.textContent = 'Could not find Employee ID column in spreadsheet. Expected column: EmplID'; return; }
+  var myRows = EVL_jobRows.filter(function(r){ return String(r[emplidKey]||'').trim() === empId; });
+  if(!myRows.length){ if(errEl) errEl.textContent = 'No records found for Employee ID: ' + empId + '. Available IDs in file: ' + [...new Set(EVL_jobRows.slice(0,5).map(function(r){return String(r[emplidKey]||'').trim();}))].join(', '); return; }
 
   EVL_employeeName = myRows[0]['Name'] || '';
 
