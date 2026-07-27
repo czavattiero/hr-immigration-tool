@@ -1882,7 +1882,10 @@ function toggleAccordion(sid){
       bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);
       if(!isOpen){
         bw.style.maxHeight='0';
-        bw._rafId=requestAnimationFrame(function(){bw.style.maxHeight=bw.scrollHeight+'px';bw._rafId=null;});
+        bw._rafId=requestAnimationFrame(function(){
+          if(bw.isConnected) bw.style.maxHeight=bw.scrollHeight+'px';
+          bw._rafId=null;
+        });
       } else {
         bw.style.maxHeight='';
       }
@@ -1902,7 +1905,7 @@ function openAccordion(sid){
       /* Set max-height without animation — called after re-renders to restore open state */
       bw.style.transition='none';
       bw.style.maxHeight=bw.scrollHeight+'px';
-      bw.offsetHeight; /* trigger layout flush to ensure maxHeight is applied before re-enabling transition, preventing unwanted animation */
+      bw.offsetHeight; /* trigger layout flush so the browser processes transition:none before we re-enable transitions, preventing any stray animation */
       bw.style.transition='';
     } else {
       bw.style.maxHeight='';
