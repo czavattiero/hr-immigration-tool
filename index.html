@@ -1985,7 +1985,7 @@ function buildConditionsUI(s){
         +'<select class="condition-select" multiple size="'+multiSize+'" data-action="setCondOpt" data-sid="'+escA(s.id)+'" data-ci="'+ci+'" title="Hold Ctrl / ⌘ to select multiple answers">'+optOpts+'</select>';
     } else if(refSec&&refSec.type==='grouped'){
       var drops=refSec.dropdowns||[];
-      var gdiSel=c.gdi!=null&&c.gdi<drops.length?c.gdi:0;
+      var gdiSel=c.gdi!=null&&c.gdi>=0&&c.gdi<drops.length?c.gdi:0;
       var gdiOpts=drops.map(function(gd,gdi){return '<option value="'+gdi+'"'+(gdiSel===gdi?' selected':'')+'>'+esc(gd.question||'Dropdown '+(gdi+1))+'</option>';}).join('');
       var selDrop=drops[gdiSel]||null;
       var items=selDrop?getDropdownNames(selDrop):[];
@@ -2492,14 +2492,15 @@ function setCondOpt(sid,ci,optIndices){
 }
 function setCondGdi(sid,ci,gdi){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
-  s.conditions[ci].gdi=parseInt(gdi,10);
+  var parsed=parseInt(gdi,10); if(isNaN(parsed)||parsed<0) return;
+  s.conditions[ci].gdi=parsed;
   delete s.conditions[ci].value;
   delete s.conditions[ci].values;
   saveData(); renderEditor(); setTimeout(function(){openAccordion(sid);},50);
 }
 function setCondVal(sid,ci,selectedValues){
   var s=DATA.find(function(s){return s.id===sid;}); if(!s||!s.conditions||!s.conditions[ci]) return;
-  s.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=='';}):[];
+  s.conditions[ci].values=Array.isArray(selectedValues)?selectedValues.filter(function(val){return val!=null&&val!=='';}):[];
   delete s.conditions[ci].value;
   saveData();
 }
