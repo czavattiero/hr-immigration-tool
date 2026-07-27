@@ -1872,6 +1872,7 @@ function toggleDocLib(){var wrap=document.getElementById('doc-lib-body-wrap'),ar
 var openAccordionId=null;
 var openDocRuleId=null;
 function cancelBlockRaf(bw){if(bw._rafId){cancelAnimationFrame(bw._rafId);bw._rafId=null;}}
+function forceReflow(el){return el.offsetHeight;}
 function toggleAccordion(sid){
   document.querySelectorAll('.editor-block').forEach(function(block){
     var bsid=block.id.replace('block-','');
@@ -1905,7 +1906,7 @@ function openAccordion(sid){
       /* Set max-height without animation — called after re-renders to restore open state */
       bw.style.transition='none';
       bw.style.maxHeight=bw.scrollHeight+'px';
-      bw.offsetHeight; /* trigger layout flush so the browser processes transition:none before we re-enable transitions, preventing any stray animation */
+      forceReflow(bw); /* ensures transition:none is processed before we re-enable transitions, preventing any stray animation */
       bw.style.transition='';
     } else {
       bw.style.maxHeight='';
