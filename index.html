@@ -1206,8 +1206,11 @@ function clearSectionAnswers(s){
 function renderIntake(){
   if(!isUsable(DATA)){DATA=JSON.parse(JSON.stringify(DEFAULT_DATA));saveData();}
   var active=DATA.filter(function(s){return s.type==='dynamic'||s.type==='grouped'||s.type==='freetext';});
-  /* clear answers for sections whose conditions are not met */
-  active.forEach(function(s){if(!conditionsMet(s)) clearSectionAnswers(s);});
+  /* clear answers for sections whose conditions are not met,
+     but preserve the position-title answer when the active output needs it */
+  var _needsPositionTitle=hasPositionTitleInActiveOutputs();
+  function shouldClearAnswers(s){return !conditionsMet(s)&&!(isPositionTitleSection(s)&&_needsPositionTitle);}
+  active.forEach(function(s){if(shouldClearAnswers(s)) clearSectionAnswers(s);});
   var banner=document.getElementById('restore-banner');
   if(banner)banner.style.display=active.length===0?'block':'none';
   var c=document.getElementById('questions-container');
@@ -1218,7 +1221,7 @@ function renderIntake(){
     var hasOpts=(s.type==='dynamic'&&s.options&&s.options.some(function(o){return o.label&&o.label.trim();}))
               ||(s.type==='grouped'&&s.dropdowns&&s.dropdowns.some(function(gd){return getDropdownNames(gd).length>0;}))
               ||(s.type==='freetext');
-    if(hasQ&&hasOpts&&conditionsMet(s)) visible.push(s);
+    if(hasQ&&hasOpts&&(conditionsMet(s)||(isPositionTitleSection(s)&&_needsPositionTitle))) visible.push(s);
   });
   visible.forEach(function(s,idx){
     var card=document.createElement('div');
@@ -1636,6 +1639,27 @@ function isPositionTitleSection(s){
   var q=normalizeQuestionText(s.question);
   return q===POSITION_TITLE_QUESTION_NORMALIZED
     || (q.indexOf('position')!==-1 && q.indexOf('title')!==-1);
+}
+function hasPositionTitleInActiveOutputs(){
+  return DATA.some(function(s){
+    if(s.type==='fixed') return /\[position title\]/i.test(s.text||'');
+    if(s.type==='dynamic'){
+      var i=answers[s.id];
+      if(i==null) return false;
+      var opt=s.options[i];
+      return opt&&/\[position title\]/i.test(opt.output||'');
+    }
+    if(s.type==='grouped'){
+      return(s.dropdowns||[]).some(function(gd,gdi){
+        var cn=answers[s.id+'__'+gdi];
+        if(!cn) return false;
+        var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
+        var outText=io?io.text:(gd.output||'');
+        return /\[position title\]/i.test(outText);
+      });
+    }
+    return false;
+  });
 }
 function replacePositionTitlePlaceholder(content,escapeForHtml){
   var text=String(content||'');
