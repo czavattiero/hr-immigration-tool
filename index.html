@@ -1877,9 +1877,13 @@ function toggleAccordion(sid){
     var hdr=block.querySelector('.block-hdr'),bw=block.querySelector('.block-body-wrap');
     if(!hdr||!bw) return;
     if(bsid===sid){var isOpen=bw.classList.contains('open');
-      if(!isOpen) bw.style.maxHeight=bw.scrollHeight+'px';
       bw.classList.toggle('open',!isOpen);hdr.classList.toggle('open',!isOpen);
-      if(isOpen) bw.style.maxHeight='';
+      if(!isOpen){
+        bw.style.maxHeight='0';
+        (function(el){requestAnimationFrame(function(){el.style.maxHeight=el.scrollHeight+'px';});})(bw);
+      } else {
+        bw.style.maxHeight='';
+      }
       openAccordionId=isOpen?null:sid;}
     else{bw.classList.remove('open');bw.style.maxHeight='';hdr.classList.remove('open');}
   });
@@ -1890,8 +1894,15 @@ function openAccordion(sid){
     var hdr=block.querySelector('.block-hdr'),bw=block.querySelector('.block-body-wrap');
     if(!hdr||!bw) return;
     var open=(bsid===sid);bw.classList.toggle('open',open);hdr.classList.toggle('open',open);
-    if(open) bw.style.maxHeight=bw.scrollHeight+'px';
-    else bw.style.maxHeight='';
+    if(open){
+      /* Set max-height without animation — called after re-renders to restore open state */
+      bw.style.transition='none';
+      bw.style.maxHeight=bw.scrollHeight+'px';
+      bw.offsetHeight; /* force reflow to commit styles before re-enabling transition */
+      bw.style.transition='';
+    } else {
+      bw.style.maxHeight='';
+    }
   });
   openAccordionId=sid;
 }
