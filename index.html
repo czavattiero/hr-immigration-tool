@@ -4930,7 +4930,7 @@ function EVL_download(){
     var today = new Date();
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     var dateStr = months[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear();
-    var name = EVL_employeeName || "[employee's name]";
+    var name = EVL_employeeName || '';
 
     var children = [];
 
@@ -4948,28 +4948,28 @@ function EVL_download(){
           width:{size:50,type:D.WidthType.PERCENTAGE},
           borders:{top:{style:D.BorderStyle.NONE,size:0},bottom:{style:D.BorderStyle.NONE,size:0},left:{style:D.BorderStyle.NONE,size:0},right:{style:D.BorderStyle.NONE,size:0}},
           children:[
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:'People & Culture',bold:true,size:28})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:'2500 University Drive NW',size:24})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:'Calgary, AB Canada T2N 1N4',size:24})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:'hrimmigration@ucalgary.ca',size:24})]})
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'People & Culture',bold:true,size:28})]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'2500 University Drive NW',size:24})]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'Calgary, AB Canada T2N 1N4',size:24})]}),
+            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'hrimmigration@ucalgary.ca',size:24})]})
           ]
         })
       ]})]
     }));
 
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({text:'PERSONAL AND CONFIDENTIAL',bold:true})]}));
+    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({font:'Calibri',text:'PERSONAL AND CONFIDENTIAL',bold:true})]}));
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:dateStr})]}));
+    children.push(new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:dateStr})]}));
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'To Whom It May Concern,'})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'To Whom It May Concern,'})]}));
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({text:'Re: '}),new D.TextRun({text:name,bold:true})]}));
+    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({font:'Calibri',text:'Re: '}),new D.TextRun({font:'Calibri',text:name,bold:true})]}));
     children.push(new D.Paragraph({text:''}));
     children.push(new D.Paragraph({children:[
-      new D.TextRun({text:'This letter is to confirm the employment history, standard hours of work and benefits of '}),
-      new D.TextRun({text:name,bold:true}),
-      new D.TextRun({text:' for immigration purposes.'})
+      new D.TextRun({font:'Calibri',text:'This letter is to confirm the employment history, standard hours of work and benefits of '}),
+      new D.TextRun({font:'Calibri',text:name,bold:true}),
+      new D.TextRun({font:'Calibri',text:' for immigration purposes.'})
     ]}));
     children.push(new D.Paragraph({text:''}));
 
@@ -4983,7 +4983,7 @@ function EVL_download(){
       return new D.TableCell({
         children:[new D.Paragraph({
           alignment:D.AlignmentType.CENTER,
-          children:[new D.TextRun({text:String(text||''),bold:!!bold,size:18})]
+          children:[new D.TextRun({font:'Calibri',text:String(text||''),bold:!!bold,size:18})]
         })],
         verticalAlign:D.VerticalAlign.CENTER
       });
@@ -5019,19 +5019,19 @@ function EVL_download(){
 
     if(hasStarNote){
       children.push(new D.Paragraph({text:''}));
-      children.push(new D.Paragraph({children:[new D.TextRun({text:'*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.',italics:true,size:16})]}));
+      children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.',italics:true,size:16})]}));
     }
     if(hasDoubleStarNote){
       children.push(new D.Paragraph({text:''}));
-      children.push(new D.Paragraph({children:[new D.TextRun({text:'** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.',italics:true,size:16})]}));
+      children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.',italics:true,size:16})]}));
     }
 
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'Sincerely,'})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'Sincerely,'})]}));
     children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'Immigration Services'})]}));
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'hrimmigration@ucalgary.ca'})]}));
-    children.push(new D.Paragraph({children:[new D.TextRun({text:'University of Calgary'})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'Immigration Services'})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'hrimmigration@ucalgary.ca'})]}));
+    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'University of Calgary'})]}));
 
     var doc = new D.Document({sections:[{
       properties:{page:{size:{width:12240,height:15840},margin:{top:720,right:720,bottom:720,left:720}}},
