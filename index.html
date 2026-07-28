@@ -4629,22 +4629,29 @@ function EVL_init(){
 function EVL_parseFile(file, kind){
   if(!file) return;
   var errEl = document.getElementById('evl-error');
+  var statusId = kind === 'job' ? 'evl-job-status' : 'evl-time-status';
+  var statusEl = document.getElementById(statusId);
   if(errEl) errEl.textContent = '';
   if(typeof XLSX === 'undefined'){
-    if(errEl) errEl.textContent = 'The spreadsheet library failed to load. Check your internet connection and reload the page.';
+    var msg = 'Spreadsheet library not loaded. Please reload the page.';
+    if(errEl) errEl.textContent = msg; else alert(msg);
     return;
   }
   var reader = new FileReader();
+  reader.onerror = function(){ 
+    var msg = 'Could not read file.';
+    if(errEl) errEl.textContent = msg; else alert(msg);
+  };
   reader.onload = function(e){
     try{
-      var wb = XLSX.read(e.target.result, {type:'array'});
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
       var ws = wb.Sheets[wb.SheetNames[0]];
-      // Scan up to 20 rows to find the real header row (skip metadata rows at top)
+      // Scan up to 20 rows to find the real header row
       var raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       var headerRowIdx = 0;
       var emplidCandidates = ['emplid','employeeid','empid'];
       for(var ri = 0; ri < Math.min(raw.length, 20); ri++){
-        var rowVals = raw[ri].map(function(v){ return String(v||'').replace(/\s/g,'').toLowerCase(); });
+        var rowVals = raw[ri].map(function(v){ return String(v||'').replace(/[^a-z0-9]/gi,'').toLowerCase(); });
         if(rowVals.some(function(v){ return emplidCandidates.indexOf(v) >= 0; })){
           headerRowIdx = ri;
           break;
@@ -4653,10 +4660,11 @@ function EVL_parseFile(file, kind){
       var rows = XLSX.utils.sheet_to_json(ws, {defval:'', range: headerRowIdx});
       if(kind === 'job'){ EVL_jobRows = rows; }
       else { EVL_timeRows = rows; }
-      var statusEl = document.getElementById(kind === 'job' ? 'evl-job-status' : 'evl-time-status');
-      if(statusEl) statusEl.textContent = file.name + ' loaded \u2713' + (headerRowIdx > 0 ? ' (headers on row '+(headerRowIdx+1)+')' : '');
+      if(statusEl) statusEl.textContent = file.name + ' ✓' + (headerRowIdx > 0 ? ' (headers on row '+(headerRowIdx+1)+')' : '');
+      if(errEl) errEl.textContent = '';
     } catch(err){
-      if(errEl) errEl.textContent = 'Could not read file: ' + err.message;
+      var msg = 'Could not read file: ' + err.message;
+      if(errEl) errEl.textContent = msg; else alert(msg);
     }
   };
   reader.readAsArrayBuffer(file);
