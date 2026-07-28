@@ -4710,12 +4710,17 @@ function EVL_build(){
   }
 
   // Flexible name column lookup
-  var nameKey = null;
-  ['Name','Employee Name','Full Name','Empl Name','EmployeeName'].forEach(function(k){
-    if(!nameKey && Object.keys(myRows[0]||{}).indexOf(k)>=0) nameKey=k;
-  });
-  if(!nameKey) nameKey = Object.keys(myRows[0]||{}).find(function(k){ return k.toLowerCase().indexOf('name')>=0; });
-  EVL_employeeName = nameKey ? (myRows[0][nameKey] || '') : '';
+  // Build full name from First+Last or single Name column
+  var rowKeys = Object.keys(myRows[0]||{});
+  var firstKey = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='firstname'||n==='first'; });
+  var lastKey  = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='lastname'||n==='last'; });
+  if(firstKey && lastKey){
+    EVL_employeeName = ((myRows[0][firstKey]||'') + ' ' + (myRows[0][lastKey]||'')).trim();
+  } else {
+    var nameKey = rowKeys.find(function(k){ return ['Name','Employee Name','Full Name','Empl Name','EmployeeName'].indexOf(k)>=0; });
+    if(!nameKey) nameKey = rowKeys.find(function(k){ return k.toLowerCase().indexOf('name')>=0; });
+    EVL_employeeName = nameKey ? (myRows[0][nameKey] || '') : '';
+  }
 
   // Group by Empl Record, find hire/term pairs
   // Find Empl Record column (varies by export)
@@ -4921,7 +4926,7 @@ function EVL_formatDate(d){
 
 function EVL_download(){
   var D = docx;
-  if(!D){ alert('Document library not loaded. Please reload.'); return; }
+  if(!D){ alert('Document library not loaded. Please reload the page.'); return; }
   var errEl = document.getElementById('evl-error');
   if(errEl) errEl.textContent = '';
   try{
@@ -4930,70 +4935,63 @@ function EVL_download(){
     var today = new Date();
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     var dateStr = months[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear();
-    var name = EVL_employeeName || '';
+    var name = EVL_employeeName || "[employee's name]";
 
-    var children = [];
+    var TW = D.WidthType.DXA;
+    var BS = D.BorderStyle;
+    var noBorder = {style: BS.NONE, size: 0, color: 'FFFFFF'};
+    var noBorders = {top:noBorder,bottom:noBorder,left:noBorder,right:noBorder,insideH:noBorder,insideV:noBorder};
 
-    // Header table: logo left, address right
-    children.push(new D.Table({
-      width: {size: 100, type: D.WidthType.PERCENTAGE},
-      borders: {top:{style:D.BorderStyle.NONE,size:0},bottom:{style:D.BorderStyle.NONE,size:0},left:{style:D.BorderStyle.NONE,size:0},right:{style:D.BorderStyle.NONE,size:0},insideH:{style:D.BorderStyle.NONE,size:0},insideV:{style:D.BorderStyle.NONE,size:0}},
-      rows: [new D.TableRow({children:[
+    // ── Header table (logo left, address right-aligned) ──────────────────
+    var headerTable = new D.Table({
+      width: {size: 10800, type: TW},
+      columnWidths: [5400, 5400],
+      borders: noBorders,
+      rows: [new D.TableRow({children: [
         new D.TableCell({
-          width:{size:50,type:D.WidthType.PERCENTAGE},
-          borders:{top:{style:D.BorderStyle.NONE,size:0},bottom:{style:D.BorderStyle.NONE,size:0},left:{style:D.BorderStyle.NONE,size:0},right:{style:D.BorderStyle.NONE,size:0}},
-          children:[new D.Paragraph({children:[new D.ImageRun({data:logoBytes,transformation:{width:127,height:52},type:'png'})]})]
+          width: {size: 5400, type: TW},
+          borders: noBorders,
+          children: [new D.Paragraph({children: [
+            new D.ImageRun({data: logoBytes, transformation: {width: 127, height: 52}, type: 'png'})
+          ]})]
         }),
         new D.TableCell({
-          width:{size:50,type:D.WidthType.PERCENTAGE},
-          borders:{top:{style:D.BorderStyle.NONE,size:0},bottom:{style:D.BorderStyle.NONE,size:0},left:{style:D.BorderStyle.NONE,size:0},right:{style:D.BorderStyle.NONE,size:0}},
-          children:[
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'People & Culture',bold:true,size:28})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'2500 University Drive NW',size:24})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'Calgary, AB Canada T2N 1N4',size:24})]}),
-            new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:'hrimmigration@ucalgary.ca',size:24})]})
+          width: {size: 5400, type: TW},
+          borders: noBorders,
+          children: [
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'People & Culture', bold: true, size: 28, color: '000000'})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: '2500 University Drive NW', size: 24})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'Calgary, AB Canada T2N 1N4', size: 24})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'hrimmigration@ucalgary.ca', size: 24})]})
           ]
         })
       ]})]
-    }));
+    });
 
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({font:'Calibri',text:'PERSONAL AND CONFIDENTIAL',bold:true})]}));
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({font:'Calibri',text:dateStr})]}));
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'To Whom It May Concern,'})]}));
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({font:'Calibri',text:'Re: '}),new D.TextRun({font:'Calibri',text:name,bold:true})]}));
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[
-      new D.TextRun({font:'Calibri',text:'This letter is to confirm the employment history, standard hours of work and benefits of '}),
-      new D.TextRun({font:'Calibri',text:name,bold:true}),
-      new D.TextRun({font:'Calibri',text:' for immigration purposes.'})
-    ]}));
-    children.push(new D.Paragraph({text:''}));
-
-    // Data table
+    // ── Employment table ─────────────────────────────────────────────────
+    var colW = [764,431,675,1135,1343,1438,1433,1408,578,1595];
     var headers = ['Position','NOC','Faculty','Department','Employment Status',
       'Standard Hours of Work per Week','Employment Start Date','Employment End Date',
       'Salary','Group Employer Benefit Plan* Eligibility'];
-    var colWidths = [1500,700,1300,1200,900,1000,1000,1000,1000,1200];
 
-    function cell(text, bold){
+    var solidBorder = {style: BS.SINGLE, size: 4, color: 'auto'};
+    var solidBorders = {top:solidBorder,bottom:solidBorder,left:solidBorder,right:solidBorder,insideH:solidBorder,insideV:solidBorder};
+
+    function makeCell(text, bold){
       return new D.TableCell({
-        children:[new D.Paragraph({
-          alignment:D.AlignmentType.CENTER,
-          children:[new D.TextRun({font:'Calibri',text:String(text||''),bold:!!bold,size:18})]
-        })],
-        verticalAlign:D.VerticalAlign.CENTER
+        borders: solidBorders,
+        verticalAlign: D.VerticalAlign.CENTER,
+        children: [new D.Paragraph({
+          alignment: D.AlignmentType.CENTER,
+          children: [new D.TextRun({text: String(text||''), bold: !!bold, size: 18})]
+        })]
       });
     }
 
     var hasStarNote = false, hasDoubleStarNote = false;
-    var tableRows = [];
-    tableRows.push(new D.TableRow({tableHeader:true, children:headers.map(function(h){ return cell(h,true); })}));
 
-    EVL_periods.forEach(function(p){
+    // Build data rows from EVL_periods
+    var dataRowArrays = EVL_periods.map(function(p){
       var bp = p.benProgram || '';
       var benefit = '';
       if(bp === 'N/A'){ benefit = '**'; hasDoubleStarNote = true; }
@@ -5002,52 +5000,95 @@ function EVL_download(){
       else if(String(p.position||'').toLowerCase().indexOf('grad') >= 0){ benefit = '**'; hasDoubleStarNote = true; }
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
-      var pay = p.compRate ? ('$'+Number(p.compRate).toFixed(2)+(p.compFreq==='Hourly'?'/hr':'/'+( p.compFreq||''))) : '';
-      tableRows.push(new D.TableRow({children:[
-        cell(p.position,false), cell(p.noc,false), cell(p.faculty,false),
-        cell(p.department,false), cell(p.employmentStatus,false), cell(hrs,false),
-        cell(EVL_formatDate(p.startDate),false), cell(EVL_formatDate(p.endDate),false),
-        cell(pay,false), cell(benefit,false)
-      ]}));
+      var pay = p.compRate ? ('$' + Number(p.compRate).toFixed(2) + (p.compFreq === 'Hourly' ? '/hr' : '/' + (p.compFreq||''))) : '';
+      return [p.position||'', p.noc||'', p.faculty||'', p.department||'', p.employmentStatus||'',
+              hrs, EVL_formatDate(p.startDate), EVL_formatDate(p.endDate), pay, benefit];
     });
 
-    children.push(new D.Table({
-      width:{size:100,type:D.WidthType.PERCENTAGE},
-      columnWidths:colWidths,
-      rows:tableRows
-    }));
+    // Rows match the actual employment periods - no padding
 
+    var tableRows = [];
+    tableRows.push(new D.TableRow({
+      tableHeader: true,
+      children: headers.map(function(h){ return makeCell(h, true); })
+    }));
+    dataRowArrays.forEach(function(row){
+      tableRows.push(new D.TableRow({children: row.map(function(v){ return makeCell(v, false); })}));
+    });
+
+    var dataTable = new D.Table({
+      width: {size: 10800, type: TW},
+      columnWidths: colW,
+      borders: solidBorders,
+      rows: tableRows
+    });
+
+    // ── Document body ────────────────────────────────────────────────────
+    var children = [];
+    children.push(headerTable);
+    children.push(new D.Paragraph({text: ''}));
+    // PERSONAL AND CONFIDENTIAL - centered, bold
+    children.push(new D.Paragraph({
+      alignment: D.AlignmentType.CENTER,
+      children: [new D.TextRun({text: 'PERSONAL AND CONFIDENTIAL', bold: true})]
+    }));
+    children.push(new D.Paragraph({text: ''}));
+    // Date - right aligned
+    children.push(new D.Paragraph({
+      alignment: D.AlignmentType.RIGHT,
+      children: [new D.TextRun({text: dateStr})]
+    }));
+    children.push(new D.Paragraph({text: ''}));
+    // Salutation
+    children.push(new D.Paragraph({children: [new D.TextRun({text: 'To Whom It May Concern,'})]}));
+    children.push(new D.Paragraph({text: ''}));
+    // Re: line - centered
+    children.push(new D.Paragraph({
+      alignment: D.AlignmentType.CENTER,
+      children: [
+        new D.TextRun({text: 'Re: '}),
+        new D.TextRun({text: name, bold: true})
+      ]
+    }));
+    children.push(new D.Paragraph({text: ''}));
+    // Body
+    children.push(new D.Paragraph({children: [
+      new D.TextRun({text: 'This letter is to confirm the employment history, standard hours of work and benefits of '}),
+      new D.TextRun({text: name, bold: true}),
+      new D.TextRun({text: ' for immigration purposes.'})
+    ]}));
+    children.push(new D.Paragraph({text: ''}));
+    children.push(dataTable);
+    // Footnotes
+    children.push(new D.Paragraph({text: ''}));
     if(hasStarNote){
-      children.push(new D.Paragraph({text:''}));
-      children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.',italics:true,size:16})]}));
+      children.push(new D.Paragraph({children: [new D.TextRun({text: '*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.', italics: true, size: 16})]}));
     }
     if(hasDoubleStarNote){
-      children.push(new D.Paragraph({text:''}));
-      children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.',italics:true,size:16})]}));
+      children.push(new D.Paragraph({children: [new D.TextRun({text: '** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics: true, size: 16})]}));
     }
-
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'Sincerely,'})]}));
-    children.push(new D.Paragraph({text:''}));
-    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'Immigration Services'})]}));
-    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'hrimmigration@ucalgary.ca'})]}));
-    children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri',text:'University of Calgary'})]}));
+    children.push(new D.Paragraph({text: ''}));
+    children.push(new D.Paragraph({children: [new D.TextRun({text: 'Sincerely,'})]}));
+    children.push(new D.Paragraph({text: ''}));
+    children.push(new D.Paragraph({children: [new D.TextRun({text: 'Immigration Services'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({text: 'hrimmigration@ucalgary.ca'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({text: 'University of Calgary'})]}));
 
     var doc = new D.Document({sections:[{
       properties:{page:{size:{width:12240,height:15840},margin:{top:720,right:720,bottom:720,left:720}}},
-      children:children
+      children: children
     }]});
 
     D.Packer.toBlob(doc).then(function(blob){
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'Employment_Verification_Letter_'+name.replace(/\s+/g,'_')+'.docx';
+      a.download = 'Employment_Verification_Letter_' + name.replace(/\s+/g,'_') + '.docx';
       a.click();
       URL.revokeObjectURL(url);
     });
   } catch(ex){
-    if(errEl) errEl.textContent = 'Error: '+ex.message;
+    if(errEl) errEl.textContent = 'Error: ' + ex.message;
     console.error(ex);
   }
 }
