@@ -4812,6 +4812,12 @@ function EVL_build(){
     return;
   }
 
+  // If any hourly periods, require the time file
+  var hasHourlyPeriods = EVL_periods.some(function(p){ return String(p.emplType||'').trim() === 'Hourly'; });
+  if(hasHourlyPeriods && !EVL_timeRows.length){
+    if(errEl) errEl.textContent = 'This employee has hourly positions. Please upload the time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) to calculate total insurable hours.';
+    return;
+  }
   EVL_renderPreview();
   } catch(ex){ if(errEl) errEl.textContent = 'Error: ' + ex.message; console.error(ex); }
 }
@@ -4895,15 +4901,19 @@ function EVL_renderPreview(){
     container.appendChild(p2);
   }
   if(hasHourly){
-    var notes = [];
-    EVL_periods.filter(function(p){ return p.emplType === 'Hourly'; }).forEach(function(p){
-      var timeRecs = EVL_timeRows.filter(function(r){ return String(r['Emplid']||'').trim() === String(EVL_periods[0].emplRecord||''); });
-      notes.push(p.position);
+    EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
+      // Find the hours column in time file
+      var timeKeys = EVL_timeRows.length > 0 ? Object.keys(EVL_timeRows[0]) : [];
+      var hoursKey = timeKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||n==='duration'; });
+      if(!hoursKey) hoursKey = timeKeys.find(function(k){ return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0; });
+      var totalHours = 0;
+      EVL_timeRows.forEach(function(r){ totalHours += parseFloat(r[hoursKey]||0)||0; });
+      totalHours = Math.round(totalHours * 100) / 100;
+      var p3 = document.createElement('p');
+      p3.style.cssText = 'font-size:12px;margin-top:4px;font-style:italic';
+      p3.textContent = '*** This is an hourly position under which no minimum number of working hours are set. For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate) + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + totalHours + '.';
+      container.appendChild(p3);
     });
-    var p3 = document.createElement('p');
-    p3.style.cssText = 'font-size:12px;margin-top:4px;font-style:italic';
-    p3.textContent = '*** Hours of work for hourly positions vary and are not fixed.';
-    container.appendChild(p3);
   }
 
   // Warning banner
@@ -4996,7 +5006,7 @@ function EVL_download(){
       var benefit = '';
       if(bp === 'N/A'){ benefit = '**'; hasDoubleStarNote = true; }
       else if(bp === 'TRU' || bp === 'SUP'){ benefit = '*'; hasStarNote = true; }
-      else if(String(p.emplType||'').trim() === 'Hourly'){ benefit = 'No'; }
+      else if(String(p.emplType||'').trim() === 'Hourly'){ benefit = '***'; hasHourly = true; }
       else if(String(p.position||'').toLowerCase().indexOf('grad') >= 0){ benefit = '**'; hasDoubleStarNote = true; }
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
@@ -5066,6 +5076,19 @@ function EVL_download(){
     }
     if(hasDoubleStarNote){
       children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: '** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics: true})]}));
+    }
+    if(hasHourly){
+      EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
+        var timeKeys = EVL_timeRows.length > 0 ? Object.keys(EVL_timeRows[0]) : [];
+        var hoursKey = timeKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||n==='duration'; });
+        if(!hoursKey) hoursKey = timeKeys.find(function(k){ return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0; });
+        var totalHours = 0;
+        EVL_timeRows.forEach(function(r){ totalHours += parseFloat(r[hoursKey]||0)||0; });
+        totalHours = Math.round(totalHours * 100) / 100;
+        var hourlyText = '*** This is an hourly position under which no minimum number of working hours are set. For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate) + ', ' + EVL_employeeName + '’s total number of insurable working hours is ' + totalHours + '.';
+        children.push(new D.Paragraph({text: ''}));
+        children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri', size:22, text:hourlyText, italics:true})]}));
+      });
     }
     children.push(new D.Paragraph({text: ''}));
     children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'Sincerely,'})]}));
