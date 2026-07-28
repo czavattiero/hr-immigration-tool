@@ -4738,7 +4738,7 @@ function EVL_build(){
     var recs = records[recKey];
     // Flexible date column
     var effDateKey = Object.keys(recs[0]||{}).find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='effdate'||n==='effectivedate'; }) || 'Eff Date';
-    recs.sort(function(a,b){ return (a[effDateKey]||'').localeCompare(b[effDateKey]||''); });
+    recs.sort(function(a,b){ return String(a[effDateKey]||'').localeCompare(String(b[effDateKey]||'')); });
 
     // Find action column (varies)
     var actKey = null;
