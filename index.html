@@ -5074,10 +5074,18 @@ function EVL_download(){
     children.push(new D.Paragraph({children: [new D.TextRun({text: 'hrimmigration@ucalgary.ca'})]}));
     children.push(new D.Paragraph({children: [new D.TextRun({text: 'University of Calgary'})]}));
 
-    var doc = new D.Document({sections:[{
-      properties:{page:{size:{width:12240,height:15840},margin:{top:720,right:720,bottom:720,left:720}}},
-      children: children
-    }]});
+    var doc = new D.Document({
+      styles:{
+        default:{
+          document:{run:{font:'Calibri',size:22}},
+          paragraph:{run:{font:'Calibri',size:22}}
+        }
+      },
+      sections:[{
+        properties:{page:{size:{width:12240,height:15840},margin:{top:720,right:720,bottom:720,left:720}}},
+        children: children
+      }]
+    });
 
     D.Packer.toBlob(doc).then(function(blob){
       var url = URL.createObjectURL(blob);
