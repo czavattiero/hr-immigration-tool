@@ -4959,10 +4959,10 @@ function EVL_download(){
           width: {size: 5400, type: TW},
           borders: noBorders,
           children: [
-            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'People & Culture', bold: true, size: 28, color: '000000'})]}),
-            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: '2500 University Drive NW', size: 24})]}),
-            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'Calgary, AB Canada T2N 1N4', size: 24})]}),
-            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({text: 'hrimmigration@ucalgary.ca', size: 24})]})
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({font:'Calibri', text: 'People & Culture', bold: true, size: 28})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({font:'Calibri', size:22, text: '2500 University Drive NW'})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({font:'Calibri', size:22, text: 'Calgary, AB Canada T2N 1N4'})]}),
+            new D.Paragraph({alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({font:'Calibri', size:22, text: 'hrimmigration@ucalgary.ca'})]})
           ]
         })
       ]})]
@@ -4983,7 +4983,7 @@ function EVL_download(){
         verticalAlign: D.VerticalAlign.CENTER,
         children: [new D.Paragraph({
           alignment: D.AlignmentType.CENTER,
-          children: [new D.TextRun({text: String(text||''), bold: !!bold, size: 18})]
+          children: [new D.TextRun({font:'Calibri', size:18, text: String(text||''), bold: !!bold})]
         })]
       });
     }
@@ -5030,49 +5030,49 @@ function EVL_download(){
     // PERSONAL AND CONFIDENTIAL - centered, bold
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
-      children: [new D.TextRun({text: 'PERSONAL AND CONFIDENTIAL', bold: true})]
+      children: [new D.TextRun({font:'Calibri', size:22, text: 'PERSONAL AND CONFIDENTIAL', bold: true})]
     }));
     children.push(new D.Paragraph({text: ''}));
     // Date - right aligned
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.RIGHT,
-      children: [new D.TextRun({text: dateStr})]
+      children: [new D.TextRun({font:'Calibri', size:22, text: dateStr})]
     }));
     children.push(new D.Paragraph({text: ''}));
     // Salutation
-    children.push(new D.Paragraph({children: [new D.TextRun({text: 'To Whom It May Concern,'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'To Whom It May Concern,'})]}));
     children.push(new D.Paragraph({text: ''}));
     // Re: line - centered
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
       children: [
-        new D.TextRun({text: 'Re: '}),
-        new D.TextRun({text: name, bold: true})
+        new D.TextRun({font:'Calibri', size:22, text: 'Re: '}),
+        new D.TextRun({font:'Calibri', size:22, text: name, bold: true})
       ]
     }));
     children.push(new D.Paragraph({text: ''}));
     // Body
     children.push(new D.Paragraph({children: [
-      new D.TextRun({text: 'This letter is to confirm the employment history, standard hours of work and benefits of '}),
-      new D.TextRun({text: name, bold: true}),
-      new D.TextRun({text: ' for immigration purposes.'})
+      new D.TextRun({font:'Calibri', size:22, text: 'This letter is to confirm the employment history, standard hours of work and benefits of '}),
+      new D.TextRun({font:'Calibri', size:22, text: name, bold: true}),
+      new D.TextRun({font:'Calibri', size:22, text: ' for immigration purposes.'})
     ]}));
     children.push(new D.Paragraph({text: ''}));
     children.push(dataTable);
     // Footnotes
     children.push(new D.Paragraph({text: ''}));
     if(hasStarNote){
-      children.push(new D.Paragraph({children: [new D.TextRun({text: '*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.', italics: true, size: 16})]}));
+      children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: '*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.', italics: true})]}));
     }
     if(hasDoubleStarNote){
-      children.push(new D.Paragraph({children: [new D.TextRun({text: '** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics: true, size: 16})]}));
+      children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: '** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.', italics: true})]}));
     }
     children.push(new D.Paragraph({text: ''}));
-    children.push(new D.Paragraph({children: [new D.TextRun({text: 'Sincerely,'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'Sincerely,'})]}));
     children.push(new D.Paragraph({text: ''}));
-    children.push(new D.Paragraph({children: [new D.TextRun({text: 'Immigration Services'})]}));
-    children.push(new D.Paragraph({children: [new D.TextRun({text: 'hrimmigration@ucalgary.ca'})]}));
-    children.push(new D.Paragraph({children: [new D.TextRun({text: 'University of Calgary'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'Immigration Services'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'hrimmigration@ucalgary.ca'})]}));
+    children.push(new D.Paragraph({children: [new D.TextRun({font:'Calibri', size:22, text: 'University of Calgary'})]}));
 
     var doc = new D.Document({
       styles:{
