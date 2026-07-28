@@ -608,7 +608,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div class="evl-drop-zone" id="evl-job-drop-zone">
         <label style="font-size:13px;font-weight:500;display:block">
           Job summary file (UC_HR_JOB_SUMMARY_EV_*.xlsx)
-          <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <input type="file" id="evl-job-file" accept=".xlsx" style="display:block;margin-top:6px" onchange="EVL_parseFile(this.files[0],'job')">
           <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
         </label>
       </div>
@@ -617,7 +617,7 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
       <div class="evl-drop-zone" id="evl-time-drop-zone">
         <label style="font-size:13px;font-weight:500;display:block">
           Time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) &ndash; only needed for hourly positions
-          <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px">
+          <input type="file" id="evl-time-file" accept=".xlsx" style="display:block;margin-top:6px" onchange="EVL_parseFile(this.files[0],'time')">
           <span class="evl-drop-hint">or drag and drop the .xlsx file here</span>
         </label>
       </div>
@@ -4664,6 +4664,7 @@ function EVL_parseFile(file, kind){
 
 function EVL_build(){
   var errEl = document.getElementById('evl-error');
+  try {
   if(errEl) errEl.textContent = '';
   var empId = (document.getElementById('evl-empl-id').value || '').trim();
   if(!empId){ if(errEl) errEl.textContent = 'Please enter an Employee ID.'; return; }
@@ -4700,7 +4701,13 @@ function EVL_build(){
     return;
   }
 
-  EVL_employeeName = myRows[0]['Name'] || '';
+  // Flexible name column lookup
+  var nameKey = null;
+  ['Name','Employee Name','Full Name','Empl Name','EmployeeName'].forEach(function(k){
+    if(!nameKey && Object.keys(myRows[0]||{}).indexOf(k)>=0) nameKey=k;
+  });
+  if(!nameKey) nameKey = Object.keys(myRows[0]||{}).find(function(k){ return k.toLowerCase().indexOf('name')>=0; });
+  EVL_employeeName = nameKey ? (myRows[0][nameKey] || '') : '';
 
   // Group by Empl Record, find hire/term pairs
   // Find Empl Record column (varies by export)
@@ -4721,7 +4728,9 @@ function EVL_build(){
   EVL_periods = [];
   Object.keys(records).forEach(function(recKey){
     var recs = records[recKey];
-    recs.sort(function(a,b){ return (a['Eff Date']||'').localeCompare(b['Eff Date']||''); });
+    // Flexible date column
+    var effDateKey = Object.keys(recs[0]||{}).find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='effdate'||n==='effectivedate'; }) || 'Eff Date';
+    recs.sort(function(a,b){ return (a[effDateKey]||'').localeCompare(b[effDateKey]||''); });
 
     // Find action column (varies)
     var actKey = null;
@@ -4738,29 +4747,46 @@ function EVL_build(){
     var reasonKey = rKeys.indexOf('Reason') >= 0 ? 'Reason' : (rKeys.indexOf('Actn Reason') >= 0 ? 'Actn Reason' : null);
     if(term && reasonKey && term[reasonKey] === 'Appointment Cancelled') return;
 
-    var emplType = hire['Empl Type'];
-    var startDate = hire['Last Start'];
+    // Flexible column helper
+    function col(row, candidates){
+      for(var ci=0;ci<candidates.length;ci++){
+        var v=row[candidates[ci]];
+        if(v!==undefined&&v!=='') return v;
+      }
+      // case-insensitive fallback
+      var rk=Object.keys(row);
+      for(var ci2=0;ci2<candidates.length;ci2++){
+        var target=candidates[ci2].toLowerCase().replace(/[\s\/]/g,'');
+        var found=rk.find(function(k){return k.toLowerCase().replace(/[\s\/]/g,'')===target;});
+        if(found&&row[found]!==undefined) return row[found];
+      }
+      return '';
+    }
+    var emplType = col(hire,['Empl Type','EmplType','Employment Type','Empl Typ']);
+    var startDate = col(hire,['Last Start','Start Date','Hire Date','Last Start Date']);
     var endDate = null;
-    if(emplType === 'Hourly'){
-      endDate = term ? term['Eff Date'] : null;
+    if(String(emplType).trim() === 'Hourly'){
+      endDate = term ? col(term,[effDateKey,'Eff Date','Effective Date','Term Date']) : null;
     } else {
-      endDate = (term && term['Term Date']) ? term['Term Date'] : hire['Expected End Date'];
+      var termDate = term ? col(term,['Term Date','Termination Date','Last Date']) : null;
+      var expEnd = col(hire,['Expected End Date','Exp End Date','End Date','Expected End']);
+      endDate = termDate || expEnd;
     }
 
     EVL_periods.push({
-      emplRecord: hire['Empl Record'],
-      position: hire['Business Title'],
-      noc: hire['NOC'],
-      faculty: hire['Faculty/Unit'],
-      department: hire['Department'],
-      employmentStatus: hire['Full/Part'],
+      emplRecord: col(hire,['Empl Record','EmplRecord','Empl Rcd','Record']),
+      position: col(hire,['Business Title','Job Title','Position','Title']),
+      noc: col(hire,['NOC','NOC Code','Noc']),
+      faculty: col(hire,['Faculty/Unit','Faculty','Unit','Dept Group']),
+      department: col(hire,['Department','Dept','Dept Name']),
+      employmentStatus: col(hire,['Full/Part','Full/Part Time','FT/PT','Status']),
       emplType: emplType,
-      hoursPerWeek: hire['Stnd Hrs/Wk'],
+      hoursPerWeek: col(hire,['Stnd Hrs/Wk','Std Hrs','Standard Hours','Hours/Week','Hrs/Wk']),
       startDate: startDate,
       endDate: endDate,
-      compRate: hire['Current Comp Rate'],
-      compFreq: hire['Comp Freq'],
-      benProgram: String(hire['Ben Progrm'] || '').trim().toUpperCase()
+      compRate: col(hire,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']),
+      compFreq: col(hire,['Comp Freq','Frequency','Comp Frequency','Pay Freq']),
+      benProgram: String(col(hire,['Ben Progrm','Ben Program','Benefit Program','Ben Prog']) || '').trim().toUpperCase()
     });
   });
 
@@ -4774,6 +4800,7 @@ function EVL_build(){
   }
 
   EVL_renderPreview();
+  } catch(ex){ if(errEl) errEl.textContent = 'Error: ' + ex.message; console.error(ex); }
 }
 
 function EVL_renderPreview(){
