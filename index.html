@@ -4917,25 +4917,40 @@ function EVL_renderPreview(){
 function EVL_calcHours(){
   if(!EVL_timeRows.length) return 0;
   var timeKeys = Object.keys(EVL_timeRows[0]);
-  // Try common hour column names
-  var hoursKey = timeKeys.find(function(k){
+  var errEl = document.getElementById('evl-error');
+  var hoursKey = null;
+
+  // Try each key - direct string match first
+  for(var ki=0; ki<timeKeys.length; ki++){
+    var k = timeKeys[ki];
+    if(k === '# of Hours' || k === 'Hours' || k === 'hours' || k === '# Of Hours'){ hoursKey = k; break; }
     var n = k.toLowerCase().replace(/[^a-z]/g,'');
-    return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||
-           n==='duration'||n==='regularhours'||n==='workedhours'||n==='insurablehours';
-  });
-  if(!hoursKey) hoursKey = timeKeys.find(function(k){
-    return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0;
-  });
-  // Last resort: first column with positive numeric values that isn't an ID/date
-  if(!hoursKey) hoursKey = timeKeys.find(function(k){
-    var n = k.toLowerCase();
-    if(n.indexOf('id')>=0||n.indexOf('date')>=0||n.indexOf('empl')>=0) return false;
-    var v = parseFloat(EVL_timeRows[0][k]);
-    return !isNaN(v) && v > 0;
-  });
+    if(n==='ofhours'||n==='hours'||n==='quantity'||n==='totalhours'||
+       n==='claimedhours'||n==='duration'||n==='regularhours'||
+       n==='workedhours'||n==='insurablehours'||n==='nbrhours'){ hoursKey = k; break; }
+    if(k.toLowerCase().indexOf('hour')>=0){ hoursKey = k; break; }
+  }
+  // Last resort: first numeric-valued column that isn't ID/date/seq/code
+  if(!hoursKey){
+    hoursKey = timeKeys.find(function(k){
+      var n = k.toLowerCase();
+      if(n.indexOf('id')>=0||n.indexOf('date')>=0||n.indexOf('empl')>=0||
+         n.indexOf('seq')>=0||n.indexOf('trc')>=0||n.indexOf('combo')>=0||
+         n.indexOf('descr')>=0||n.indexOf('code')>=0) return false;
+      return !isNaN(parseFloat(EVL_timeRows[0][k]));
+    });
+  }
+  if(!hoursKey){
+    if(errEl) errEl.textContent = 'Could not find hours column in time file. Columns: ' + timeKeys.slice(0,8).join(' | ');
+    return 0;
+  }
   var total = 0;
   EVL_timeRows.forEach(function(r){ total += parseFloat(r[hoursKey]||0)||0; });
-  return Math.round(total * 100) / 100;
+  total = Math.round(total * 100) / 100;
+  if(total === 0 && errEl){
+    errEl.textContent = 'Hours column "' + hoursKey + '" found but total is 0. Sample value: ' + JSON.stringify(EVL_timeRows[0][hoursKey]);
+  }
+  return total;
 }
 
 function EVL_formatDate(d){
