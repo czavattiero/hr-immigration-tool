@@ -5031,6 +5031,8 @@ function EVL_download(){
       else if(bp === 'TRU' || bp === 'SUP' || bp === 'MPS'){ benefit = '*'; hasStarNote = true; }
       else if(String(p.emplType||'').trim() === 'Hourly'){ benefit = '***'; hasHourly = true; }
       else if(String(p.position||'').toLowerCase().indexOf('grad') >= 0){ benefit = '**'; hasDoubleStarNote = true; }
+      // Always track hourly regardless of bp
+      if(String(p.emplType||'').trim() === 'Hourly') hasHourly = true;
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
       var pay = p.compRate ? ('$' + Number(p.compRate).toFixed(2) + (p.compFreq === 'Hourly' ? '/hr' : '/' + (p.compFreq||''))) : '';
