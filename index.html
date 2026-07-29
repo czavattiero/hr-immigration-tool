@@ -4649,10 +4649,10 @@ function EVL_parseFile(file, kind){
       // Scan up to 20 rows to find the real header row
       var raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       var headerRowIdx = 0;
-      var emplidCandidates = ['emplid','employeeid','empid'];
+      var headerCandidates = ['emplid','employeeid','empid','ofhours','hours','seqnbr','trc','combocod'];
       for(var ri = 0; ri < Math.min(raw.length, 20); ri++){
         var rowVals = raw[ri].map(function(v){ return String(v||'').replace(/[^a-z0-9]/gi,'').toLowerCase(); });
-        if(rowVals.some(function(v){ return emplidCandidates.indexOf(v) >= 0; })){
+        if(rowVals.some(function(v){ return headerCandidates.indexOf(v) >= 0; })){
           headerRowIdx = ri;
           break;
         }
