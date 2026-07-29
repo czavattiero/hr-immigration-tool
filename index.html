@@ -4861,7 +4861,7 @@ function EVL_renderPreview(){
     if(bp === 'N/A'){
       benefitCell = '**';
       hasGradNote = true;
-    } else if(bp === 'TRU' || bp === 'SUP'){
+    } else if(bp === 'TRU' || bp === 'SUP' || bp === 'MPS'){
       benefitCell = '*';
       hasProfessorNote = true;
     } else if(p.emplType === 'Hourly'){
@@ -5013,7 +5013,7 @@ function EVL_download(){
       var bp = p.benProgram || '';
       var benefit = '';
       if(bp === 'N/A'){ benefit = '**'; hasDoubleStarNote = true; }
-      else if(bp === 'TRU' || bp === 'SUP'){ benefit = '*'; hasStarNote = true; }
+      else if(bp === 'TRU' || bp === 'SUP' || bp === 'MPS'){ benefit = '*'; hasStarNote = true; }
       else if(String(p.emplType||'').trim() === 'Hourly'){ benefit = '***'; hasHourly = true; }
       else if(String(p.position||'').toLowerCase().indexOf('grad') >= 0){ benefit = '**'; hasDoubleStarNote = true; }
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
