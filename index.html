@@ -4925,10 +4925,18 @@ function EVL_renderPreview(){
 
 function EVL_formatDate(d){
   if(!d) return '';
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  // Handle Excel serial date numbers (e.g. 45170)
+  var num = parseFloat(d);
+  if(!isNaN(num) && num > 40000 && num < 60000){
+    // Excel epoch: Jan 1 1900 = 1, with leap year bug (day 60 = Feb 29 1900 never existed)
+    var excelEpoch = new Date(1899, 11, 30);
+    var date = new Date(excelEpoch.getTime() + num * 86400000);
+    return months[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
+  }
   var s = String(d).trim();
   if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
     var parts = s.split('-');
-    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     return months[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
   }
   return s;
@@ -4998,7 +5006,7 @@ function EVL_download(){
       });
     }
 
-    var hasStarNote = false, hasDoubleStarNote = false;
+    var hasStarNote = false, hasDoubleStarNote = false, hasHourly = false;
 
     // Build data rows from EVL_periods
     var dataRowArrays = EVL_periods.map(function(p){
