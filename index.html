@@ -4902,25 +4902,40 @@ function EVL_renderPreview(){
   }
   if(hasHourly){
     EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
-      // Find the hours column in time file
-      var timeKeys = EVL_timeRows.length > 0 ? Object.keys(EVL_timeRows[0]) : [];
-      var hoursKey = timeKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||n==='duration'; });
-      if(!hoursKey) hoursKey = timeKeys.find(function(k){ return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0; });
-      var totalHours = 0;
-      EVL_timeRows.forEach(function(r){ totalHours += parseFloat(r[hoursKey]||0)||0; });
-      totalHours = Math.round(totalHours * 100) / 100;
+      var totalHours = EVL_calcHours();
+      var periodText = p.endDate
+        ? 'For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate)
+        : 'Since ' + EVL_formatDate(p.startDate);
       var p3 = document.createElement('p');
       p3.style.cssText = 'font-size:12px;margin-top:4px;font-style:italic';
-      p3.textContent = '*** This is an hourly position under which no minimum number of working hours are set. For the period of ' + EVL_formatDate(p.startDate) + (p.endDate ? ' to ' + EVL_formatDate(p.endDate) : '') + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + totalHours + '.';
+      p3.textContent = '*** This is an hourly position under which no minimum number of working hours are set. ' + periodText + ', ' + EVL_employeeName + '\u2019s total number of insurable working hours is ' + totalHours + '.';
       container.appendChild(p3);
     });
   }
+}
 
-  // Warning banner
-  var warn = document.createElement('div');
-  warn.style.cssText = 'background:#fff8ed;border:1px solid #e5a020;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:12px;color:#7a5000';
-  warn.innerHTML = '<strong>Please always confirm the information entered in the Word document against PeopleSoft, as the reports may not include the most up-to-date information.</strong>';
-  container.appendChild(warn);
+function EVL_calcHours(){
+  if(!EVL_timeRows.length) return 0;
+  var timeKeys = Object.keys(EVL_timeRows[0]);
+  // Try common hour column names
+  var hoursKey = timeKeys.find(function(k){
+    var n = k.toLowerCase().replace(/[^a-z]/g,'');
+    return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||
+           n==='duration'||n==='regularhours'||n==='workedhours'||n==='insurablehours';
+  });
+  if(!hoursKey) hoursKey = timeKeys.find(function(k){
+    return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0;
+  });
+  // Last resort: first column with positive numeric values that isn't an ID/date
+  if(!hoursKey) hoursKey = timeKeys.find(function(k){
+    var n = k.toLowerCase();
+    if(n.indexOf('id')>=0||n.indexOf('date')>=0||n.indexOf('empl')>=0) return false;
+    var v = parseFloat(EVL_timeRows[0][k]);
+    return !isNaN(v) && v > 0;
+  });
+  var total = 0;
+  EVL_timeRows.forEach(function(r){ total += parseFloat(r[hoursKey]||0)||0; });
+  return Math.round(total * 100) / 100;
 }
 
 function EVL_formatDate(d){
@@ -5087,16 +5102,11 @@ function EVL_download(){
     }
     if(hasHourly){
       EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
-        var timeKeys = EVL_timeRows.length > 0 ? Object.keys(EVL_timeRows[0]) : [];
-        // Try common column names for hours
-        var hoursKey = timeKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='quantity'||n==='hours'||n==='totalhours'||n==='claimedhours'||n==='duration'||n==='regularhours'||n==='workedhours'; });
-        if(!hoursKey) hoursKey = timeKeys.find(function(k){ return k.toLowerCase().indexOf('hour')>=0||k.toLowerCase().indexOf('qty')>=0||k.toLowerCase().indexOf('quant')>=0; });
-        // If still not found, pick first numeric column after ID columns
-        if(!hoursKey) hoursKey = timeKeys.find(function(k){ var v=EVL_timeRows[0][k]; return typeof v==='number'&&v>0&&k.toLowerCase().indexOf('id')<0&&k.toLowerCase().indexOf('date')<0; });
-        var totalHours = 0;
-        EVL_timeRows.forEach(function(r){ totalHours += parseFloat(r[hoursKey]||0)||0; });
-        totalHours = Math.round(totalHours * 100) / 100;
-        var hourlyText = '*** This is an hourly position under which no minimum number of working hours are set. For the period of ' + EVL_formatDate(p.startDate) + (p.endDate ? ' to ' + EVL_formatDate(p.endDate) : '') + ', ' + EVL_employeeName + '’s total number of insurable working hours is ' + totalHours + '.';
+        var totalHours = EVL_calcHours();
+        var periodText = p.endDate
+          ? 'For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate)
+          : 'Since ' + EVL_formatDate(p.startDate);
+        var hourlyText = '*** This is an hourly position under which no minimum number of working hours are set. ' + periodText + ', ' + EVL_employeeName + '’s total number of insurable working hours is ' + totalHours + '.';
         children.push(new D.Paragraph({text: ''}));
         children.push(new D.Paragraph({children:[new D.TextRun({font:'Calibri', size:22, text:hourlyText, italics:true})]}));
       });
