@@ -4848,7 +4848,7 @@ function EVL_renderPreview(){
   headers.forEach(function(h){ thead.appendChild(cell(h, true)); });
   table.appendChild(thead);
 
-  var hasHourly = false, hasGradNote = false, hasProfessorNote = false;
+  var hasHourly = false, hasDoubleStarNote = false, hasStarNote = false;
 
   EVL_periods.forEach(function(p){
     var tr = document.createElement('tr');
@@ -4860,18 +4860,18 @@ function EVL_renderPreview(){
     var bp = p.benProgram || '';
     if(bp === 'N/A'){
       benefitCell = '**';
-      hasGradNote = true;
+      hasDoubleStarNote = true;
     } else if(bp === 'TRU' || bp === 'SUP' || bp === 'MPS'){
       benefitCell = '*';
-      hasProfessorNote = true;
+      hasStarNote = true;
     } else if(p.emplType === 'Hourly'){
       benefitCell = 'No';
     } else if(String(p.position).toLowerCase().indexOf('grad') !== -1){
       benefitCell = '**';
-      hasGradNote = true;
+      hasDoubleStarNote = true;
     } else if(String(p.position).toLowerCase().indexOf('professor') !== -1 || String(p.position).toLowerCase().indexOf('postdoctoral') !== -1){
       benefitCell = '*';
-      hasProfessorNote = true;
+      hasStarNote = true;
     }
 
     var payDisplay = p.compRate ? (p.compFreq === 'Hourly' ? '$'+Number(p.compRate).toFixed(2)+'/hr' : '$'+Number(p.compRate).toFixed(2)+'/'+p.compFreq) : '';
@@ -4888,13 +4888,13 @@ function EVL_renderPreview(){
   container.appendChild(table);
 
   // Footnotes
-  if(hasProfessorNote){
+  if(hasStarNote){
     var p1 = document.createElement('p');
     p1.style.cssText = 'font-size:12px;margin-top:8px;font-style:italic';
     p1.textContent = '*The Group Employment Benefit Plan may include the following components: Extended Health, Dental, AD&D, and Long-Term Disability, depending on the specific plan and employee election.';
     container.appendChild(p1);
   }
-  if(hasGradNote){
+  if(hasDoubleStarNote){
     var p2 = document.createElement('p');
     p2.style.cssText = 'font-size:12px;margin-top:4px;font-style:italic';
     p2.textContent = '** Graduate Student jobs are not eligible for Group Employment Benefit Plan but may receive benefit coverage through the Graduate Students\u2019 Association.';
