@@ -1112,10 +1112,11 @@ function saveData(){
   var payload={v:2,sections:DATA,docRules:DOC_RULES};
   var json=JSON.stringify(payload);
   try{localStorage.setItem(LOCAL_KEY,json);}catch(e){}
+  // Set hash immediately so polling doesn't overwrite pending changes
+  _lastSectionsAt=json.length+'_'+json.substring(0,50);
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     sbWrite('sections',json).then(function(rows){
-      if(rows&&rows[0]) _lastSectionsAt=json.length+'_'+json.substring(0,50);
       showToast('Saved ✓');
       setSpStatus(true);
     }).catch(function(e){
