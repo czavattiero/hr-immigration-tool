@@ -4679,149 +4679,99 @@ function EVL_build(){
   if(!empId){ if(errEl) errEl.textContent = 'Please enter an Employee ID.'; return; }
   if(!EVL_jobRows.length){ if(errEl) errEl.textContent = 'Please upload the job summary spreadsheet.'; return; }
 
-  // Group rows by employee ID
-  // Find the Emplid column - try many variations PeopleSoft uses
+  // Find Empl ID column
+  var allKeys = Object.keys(EVL_jobRows[0] || {});
   var emplidKey = null;
-  var allKeys = EVL_jobRows.length > 0 ? Object.keys(EVL_jobRows[0]) : [];
-  // Try exact matches first
-  var exactCandidates = ['EmplID','Emplid','EMPLID','emplid','Empl ID','EMPL ID','Employee ID','EmployeeID','EmpID'];
-  for(var ei=0; ei<exactCandidates.length; ei++){
-    if(allKeys.indexOf(exactCandidates[ei]) >= 0){ emplidKey = exactCandidates[ei]; break; }
-  }
-  // Fallback: strip spaces and case-insensitive match on anything containing 'empl' and 'id'
-  if(!emplidKey){
-    emplidKey = allKeys.find(function(k){
-      var n = k.replace(/\s/g,'').toLowerCase();
-      return n === 'emplid' || n === 'employeeid' || n === 'empid';
-    });
-  }
-  // Last resort: any column whose stripped lowercase starts with 'empl'
-  if(!emplidKey){
-    emplidKey = allKeys.find(function(k){ return k.replace(/\s/g,'').toLowerCase().indexOf('emplid') >= 0; });
-  }
-  if(!emplidKey){
-    if(errEl) errEl.textContent = 'Could not find Employee ID column. Columns found: ' + allKeys.slice(0,8).join(', ');
-    return;
-  }
-  var myRows = EVL_jobRows.filter(function(r){ return String(r[emplidKey]||'').trim() === empId; });
+  ['EmplID','Emplid','EMPLID','emplid','Empl ID','EMPL ID','Employee ID','EmployeeID','EmpID'].forEach(function(k){
+    if(!emplidKey && allKeys.indexOf(k)>=0) emplidKey=k;
+  });
+  if(!emplidKey) emplidKey = allKeys.find(function(k){ return k.replace(/\s/g,'').toLowerCase()==='emplid'||k.replace(/\s/g,'').toLowerCase()==='employeeid'; });
+  if(!emplidKey){ if(errEl) errEl.textContent='Could not find Employee ID column. Columns: '+allKeys.slice(0,8).join(', '); return; }
+
+  var myRows = EVL_jobRows.filter(function(r){ return String(r[emplidKey]||'').trim()===empId; });
   if(!myRows.length){
-    var sample = EVL_jobRows.slice(0,3).map(function(r){ return String(r[emplidKey]||'').trim(); });
-    if(errEl) errEl.textContent = 'No records found for Employee ID: ' + empId + '. Sample IDs in file: ' + sample.join(', ') + ' (column used: ' + emplidKey + ')';
+    var sample=EVL_jobRows.slice(0,3).map(function(r){ return String(r[emplidKey]||'').trim(); });
+    if(errEl) errEl.textContent='No records found for Employee ID: '+empId+'. Sample IDs: '+sample.join(', ');
     return;
   }
 
-  // Flexible name column lookup
-  // Build full name from First+Last or single Name column
+  // Build employee name from First + Last columns
   var rowKeys = Object.keys(myRows[0]||{});
   var firstKey = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='firstname'||n==='first'; });
   var lastKey  = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/[^a-z]/g,''); return n==='lastname'||n==='last'; });
   if(firstKey && lastKey){
-    EVL_employeeName = ((myRows[0][firstKey]||'') + ' ' + (myRows[0][lastKey]||'')).trim();
+    EVL_employeeName = ((myRows[0][firstKey]||'')+' '+(myRows[0][lastKey]||'')).trim();
   } else {
-    var nameKey = rowKeys.find(function(k){ return ['Name','Employee Name','Full Name','Empl Name','EmployeeName'].indexOf(k)>=0; });
-    if(!nameKey) nameKey = rowKeys.find(function(k){ return k.toLowerCase().indexOf('name')>=0; });
-    EVL_employeeName = nameKey ? (myRows[0][nameKey] || '') : '';
+    var nameKey=rowKeys.find(function(k){ return ['Name','Employee Name','Full Name','Empl Name'].indexOf(k)>=0; });
+    if(!nameKey) nameKey=rowKeys.find(function(k){ return k.toLowerCase().indexOf('name')>=0; });
+    EVL_employeeName=nameKey?(myRows[0][nameKey]||''):'';
   }
 
-  // Group by Empl Record, find hire/term pairs
-  // Find Empl Record column (varies by export)
-  var emplRecKey = null;
-  var allKeys2 = Object.keys(myRows[0]||{});
-  ['Empl Record','EmplRecord','Empl Rcd','Empl Rec','Record'].forEach(function(k){
-    if(!emplRecKey && allKeys2.indexOf(k)>=0) emplRecKey = k;
-  });
-  if(!emplRecKey) emplRecKey = allKeys2.find(function(k){ return k.toLowerCase().replace(/\s/g,'').indexOf('emplrec') >= 0 || k.toLowerCase().replace(/\s/g,'').indexOf('emplrecord') >= 0; });
+  // Flexible column helper
+  function col(row, candidates){
+    for(var ci=0;ci<candidates.length;ci++){
+      var v=row[candidates[ci]];
+      if(v!==undefined&&v!==null&&v!=='') return v;
+    }
+    var rk=Object.keys(row);
+    for(var ci2=0;ci2<candidates.length;ci2++){
+      var target=candidates[ci2].toLowerCase().replace(/[\s\/]/g,'');
+      var found=rk.find(function(k){ return k.toLowerCase().replace(/[\s\/]/g,'')===target; });
+      if(found&&row[found]!==undefined&&row[found]!==null&&row[found]!=='') return row[found];
+    }
+    return '';
+  }
 
-  var records = {};
-  myRows.forEach(function(r){
-    var rec = String((emplRecKey ? r[emplRecKey] : null)||'0').trim();
-    if(!records[rec]) records[rec] = [];
-    records[rec].push(r);
-  });
+  // One row per Hire/Rehire action — do not combine/group
+  var hireActions = ['Hire','Rehire'];
+  var actKey = rowKeys.find(function(k){ return ['Action','Actn','ACTION'].indexOf(k)>=0; });
+  var reasonKey = rowKeys.find(function(k){ return ['Reason','Actn Reason'].indexOf(k)>=0; });
 
   EVL_periods = [];
-  Object.keys(records).forEach(function(recKey){
-    var recs = records[recKey];
-    // Flexible date column
-    var effDateKey = Object.keys(recs[0]||{}).find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='effdate'||n==='effectivedate'; }) || 'Eff Date';
-    recs.sort(function(a,b){ return String(a[effDateKey]||'').localeCompare(String(b[effDateKey]||'')); });
+  myRows.forEach(function(r){
+    var action = actKey ? String(r[actKey]||'') : '';
+    if(hireActions.indexOf(action) < 0) return;
+    // Skip cancelled appointments
+    var reason = reasonKey ? String(r[reasonKey]||'') : '';
+    if(reason === 'Appointment Cancelled') return;
 
-    // Find action column (varies)
-    var actKey = null;
-    var rKeys = Object.keys(recs[0]||{});
-    ['Action','Actn','ACTION'].forEach(function(k){ if(!actKey && rKeys.indexOf(k)>=0) actKey=k; });
-
-    var hire = recs.find(function(r){
-      var act = actKey ? r[actKey] : '';
-      return act === 'Hire' || act === 'Rehire' || act === 'Transfer' || act === 'Data Change' || act === 'Pay Rate Change' || !act;
-    });
-    if(!hire) hire = recs[0];
-    var term = recs.slice().reverse().find(function(r){ var act = actKey ? r[actKey] : ''; return act === 'Termination'; });
-    if(!hire) return;
-    var reasonKey = rKeys.indexOf('Reason') >= 0 ? 'Reason' : (rKeys.indexOf('Actn Reason') >= 0 ? 'Actn Reason' : null);
-    if(term && reasonKey && term[reasonKey] === 'Appointment Cancelled') return;
-
-    // Flexible column helper
-    function col(row, candidates){
-      for(var ci=0;ci<candidates.length;ci++){
-        var v=row[candidates[ci]];
-        if(v!==undefined&&v!=='') return v;
-      }
-      // case-insensitive fallback
-      var rk=Object.keys(row);
-      for(var ci2=0;ci2<candidates.length;ci2++){
-        var target=candidates[ci2].toLowerCase().replace(/[\s\/]/g,'');
-        var found=rk.find(function(k){return k.toLowerCase().replace(/[\s\/]/g,'')===target;});
-        if(found&&row[found]!==undefined) return row[found];
-      }
-      return '';
-    }
-    var emplType = col(hire,['Empl Type','EmplType','Employment Type','Empl Typ']);
-    var startDate = col(hire,['Last Start','Start Date','Hire Date','Last Start Date']);
-    var endDate = null;
-    if(String(emplType).trim() === 'Hourly'){
-      endDate = term ? col(term,[effDateKey,'Eff Date','Effective Date','Term Date']) : null;
-    } else {
-      var termDate = term ? col(term,['Term Date','Termination Date','Last Date']) : null;
-      var expEnd = col(hire,['Expected End Date','Exp End Date','End Date','Expected End']);
-      endDate = termDate || expEnd;
-    }
+    var emplType = col(r,['Empl Type','EmplType','Employment Type','Empl Typ']);
+    var startDate = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
+    var endDate   = col(r,['Expected End Date','Exp End Date','End Date','Expected End']);
 
     EVL_periods.push({
-      emplRecord: col(hire,['Empl Record','EmplRecord','Empl Rcd','Record']),
-      position: col(hire,['Business Title','Job Title','Position','Title']),
-      noc: col(hire,['NOC','NOC Code','Noc']),
-      faculty: col(hire,['Faculty/Unit','Faculty','Unit','Dept Group']),
-      department: col(hire,['Department','Dept','Dept Name']),
-      employmentStatus: col(hire,['Full/Part','Full/Part Time','FT/PT','Status']),
-      emplType: emplType,
-      hoursPerWeek: col(hire,['Stnd Hrs/Wk','Std Hrs','Standard Hours','Hours/Week','Hrs/Wk']),
-      startDate: startDate,
-      endDate: endDate,
-      compRate: col(hire,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']),
-      compFreq: col(hire,['Comp Freq','Frequency','Comp Frequency','Pay Freq']),
-      benProgram: String(col(hire,['Ben Progrm','Ben Program','Benefit Program','Ben Prog']) || '').trim().toUpperCase()
+      emplRecord:       col(r,['Empl Record','EmplRecord','Empl Rcd','Record']),
+      position:         col(r,['Business Title','Job Title','Position','Title']),
+      noc:              col(r,['NOC','NOC Code','Noc']),
+      faculty:          col(r,['Faculty/Unit','Faculty','Unit','Dept Group']),
+      department:       col(r,['Department','Dept','Dept Name']),
+      employmentStatus: col(r,['Full/Part','Full/Part Time','FT/PT','Status']),
+      emplType:         emplType,
+      hoursPerWeek:     col(r,['Stnd Hrs/Wk','Std Hrs','Standard Hours','Hours/Week','Hrs/Wk']),
+      startDate:        startDate,
+      endDate:          endDate,
+      compRate:         col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']),
+      compFreq:         col(r,['Comp Freq','Frequency','Comp Frequency','Pay Freq']),
+      benProgram:       String(col(r,['Ben Progrm','Ben Program','Benefit Program','Ben Prog'])||'').trim().toUpperCase()
     });
   });
 
   if(!EVL_periods.length){
-    // Debug: show what we found to help diagnose
-    var debugCols = Object.keys(myRows[0] || {}).slice(0,10).join(', ');
-    var debugActions = [...new Set(myRows.map(function(r){ return String(r['Action']||r['Actn']||'(no action)'); }))].join(', ');
-    var debugRecords = [...new Set(myRows.map(function(r){ return String(r['Empl Record']||r['EmplRecord']||r['Empl Rcd']||'?'); }))].join(', ');
-    if(errEl) errEl.textContent = 'Could not extract employment periods. Rows found: ' + myRows.length + '. Actions: ' + debugActions + '. Records: ' + debugRecords + '. Columns: ' + debugCols;
+    var debugActions=[...new Set(myRows.map(function(r){ return String(r[actKey]||'(no action)'); }))].join(', ');
+    if(errEl) errEl.textContent='No Hire/Rehire rows found. Actions in file: '+debugActions;
     return;
   }
 
-  // If any hourly periods, require the time file
-  var hasHourlyPeriods = EVL_periods.some(function(p){ return String(p.emplType||'').trim() === 'Hourly'; });
+  // Require time file if any hourly periods
+  var hasHourlyPeriods=EVL_periods.some(function(p){ return String(p.emplType||'').trim()==='Hourly'; });
   if(hasHourlyPeriods && !EVL_timeRows.length){
-    if(errEl) errEl.textContent = 'This employee has hourly positions. Please upload the time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) to calculate total insurable hours.';
+    if(errEl) errEl.textContent='This employee has hourly positions. Please upload the time report file (UC_PY_TL_REPORT_TIME_BY_EMPLID_*.xlsx) to calculate total insurable hours.';
     return;
   }
   EVL_renderPreview();
-  } catch(ex){ if(errEl) errEl.textContent = 'Error: ' + ex.message; console.error(ex); }
+  } catch(ex){ if(errEl) errEl.textContent='Error: '+ex.message; console.error(ex); }
 }
+
 
 function EVL_renderPreview(){
   var wrap = document.getElementById('evl-preview-wrap');
