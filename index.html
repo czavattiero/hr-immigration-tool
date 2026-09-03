@@ -1344,12 +1344,12 @@ function renderOutput(){
   var segs=[],docs=[];
   DATA.forEach(function(s){
     if(s.type==='fixed'){
-      var fixedHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true);
+      var fixedHtml=replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true),true),true);
       if(fixedHtml&&htmlToText(fixedHtml)) segs.push({label:s.label,html:fixedHtml,type:'fixed'});
     } else if(s.type==='dynamic'){
       var i=answers[s.id]; if(i==null) return;
       var opt=s.options[i]; if(!opt) return;
-      var dynamicHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(opt.output,true),true);
+      var dynamicHtml=replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(opt.output,true),true),true),true);
       if(dynamicHtml&&htmlToText(dynamicHtml)) segs.push({label:s.label,html:dynamicHtml,type:'dynamic'});
     } else if(s.type==='grouped'){
       /* Each dropdown in this section has its own output */
@@ -1358,7 +1358,7 @@ function renderOutput(){
         var cn=answers[key]; if(!cn) return;
         /* check for per-item custom output first */
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var outHtml=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true);
+        var outHtml=replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true),true),true);
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     } else if(s.type==='freetext'){
@@ -1657,9 +1657,23 @@ function replacePositionTitlePlaceholder(content,escapeForHtml){
   var replacement=escapeForHtml?esc(positionTitle):positionTitle;
   return text.replace(/\[position title\]/gi,replacement);
 }
+function replaceJobLocationPlaceholder(content,escapeForHtml){
+  var text=String(content||'');
+  var jobLocation=getFreeTextAnswerByQuestion("What is the job location?");
+  if(!jobLocation) return text;
+  var replacement=escapeForHtml?esc(jobLocation):jobLocation;
+  return text.replace(/\[job location address\]/gi,replacement).replace(/\[job location\]/gi,replacement);
+}
+function replaceNOCPlaceholder(content,escapeForHtml){
+  var text=String(content||'');
+  var noc=getFreeTextAnswerByQuestion("What is the NOC?");
+  if(!noc) return text;
+  var replacement=escapeForHtml?esc(noc):noc;
+  return text.replace(/\[NOC\]/gi,replacement).replace(/\[noc\]/gi,replacement);
+}
 function buildDigestEmailHtml(htmlParts,docs,applicantName){
   var sections=[];
-  var bodyHtml=replaceApplicantNamePlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(buildEmailHtmlFromParts(htmlParts),true),true),applicantName,true);
+  var bodyHtml=replaceApplicantNamePlaceholder(replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(buildEmailHtmlFromParts(htmlParts),true),true),true),true),applicantName,true);
   if(docs&&docs.length) sections.push(buildAttachmentReminderHtml(docs));
   sections.push(bodyHtml);
   return sections.join('');
@@ -1667,7 +1681,7 @@ function buildDigestEmailHtml(htmlParts,docs,applicantName){
 function buildDigestEmailText(parts,docs,applicantName){
   var sections=[];
   var combinedText=(parts||[]).join('\n\n');
-  var bodyText=replaceApplicantNamePlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(combinedText,false),false),applicantName,false);
+  var bodyText=replaceApplicantNamePlaceholder(replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(combinedText,false),false),false),false),applicantName,false);
   if(docs&&docs.length) sections.push(buildAttachmentReminderText(docs));
   if(bodyText) sections.push(bodyText);
   return sections.join('\n\n');
@@ -1840,12 +1854,12 @@ function writePlainClipboard(text){
 function collectSelectedOutputTextParts(){
   var parts=[];
   DATA.forEach(function(s){
-    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true)));}
+    if(s.type==='fixed'){if(s.text) parts.push(htmlToText(replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(s.text,true),true),true),true)));}
     else if(s.type==='dynamic'){
       var i=answers[s.id];
       if(i!=null){
         var o=s.options[i];
-        if(o&&o.output) parts.push(htmlToText(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(o.output,true),true)));
+        if(o&&o.output) parts.push(htmlToText(replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(o.output,true),true),true),true)));
       }
     } else if(s.type==='grouped'){
       (s.dropdowns||[]).forEach(function(gd,gdi){
@@ -1853,7 +1867,7 @@ function collectSelectedOutputTextParts(){
         var cn=answers[key];
         if(!cn) return;
         var io=(gd.itemOutputs||[]).find(function(x){return getItemArr(x).indexOf(cn)!==-1;});
-        var t=replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true);
+        var t=replaceJobLocationPlaceholder(replaceNOCPlaceholder(replacePositionTitlePlaceholder(replaceResearchAwardNamePlaceholder(replaceCountryOfCitizenshipPlaceholder(io?io.text:(gd.output||''),cn,true),true),true),true),true);
         if(t) parts.push(htmlToText(t));
       });
     } else if(s.type==='freetext'){
