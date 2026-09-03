@@ -1079,7 +1079,7 @@ function startPolling(){
       // Compare content hash to detect changes by other editors
       if(si&&si.content){
         var siHash=si.content.length+'_'+si.content.substring(0,50);
-        if(siHash!==_lastSectionsAt){
+        if(siHash!==_lastSectionsAt&&!_pendingSave){
           try{var d=JSON.parse(si.content);var p=parseSectionsPayload(d);if(p.sections&&isUsable(p.sections)){DATA=p.sections;if(p.docRules)DOC_RULES=p.docRules;_lastSectionsAt=siHash;try{localStorage.setItem(LOCAL_KEY,si.content);}catch(e){}changed=true;}}catch(e){}
         }
       }
@@ -1108,18 +1108,21 @@ function setSpStatus(online){
 /* ===== SAVE ===== */
 var saveDataTimer=null,saveLibTimer=null;
 
+var _pendingSave=false;
 function saveData(){
   var payload={v:2,sections:DATA,docRules:DOC_RULES};
   var json=JSON.stringify(payload);
   try{localStorage.setItem(LOCAL_KEY,json);}catch(e){}
-  // Set hash immediately so polling doesn't overwrite pending changes
-  _lastSectionsAt=json.length+'_'+json.substring(0,50);
+  _pendingSave=true;
   clearTimeout(saveDataTimer);
   saveDataTimer=setTimeout(function(){
     sbWrite('sections',json).then(function(rows){
+      if(rows&&rows[0]) _lastSectionsAt=json.length+'_'+json.substring(0,50);
+      _pendingSave=false;
       showToast('Saved ✓');
       setSpStatus(true);
     }).catch(function(e){
+      _pendingSave=false;
       console.error('saveData failed:',e);
       showToast('Offline — saved locally');
       setSpStatus(false);
