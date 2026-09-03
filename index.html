@@ -1362,7 +1362,7 @@ function renderOutput(){
         if(outHtml&&htmlToText(outHtml)) segs.push({label:s.label+(s.dropdowns.length>1?' ('+(gd.question||'Option '+(gdi+1))+')':''),html:outHtml,type:'grouped'});
       });
     } else if(s.type==='freetext'){
-      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)) return;
+      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)||isJobLocationSection(s)||isNOCSection(s)) return;
       var ftHtml=buildFreeTextOutputHtml(s,answers[s.id]);
       if(ftHtml&&htmlToText(ftHtml)) segs.push({label:s.label,html:ftHtml,type:'freetext'});
     }
@@ -1629,6 +1629,16 @@ function isPositionTitleSection(s){
   return q===POSITION_TITLE_QUESTION_NORMALIZED
     || (q.indexOf('position')!==-1 && q.indexOf('title')!==-1);
 }
+function isJobLocationSection(s){
+  if(s.type!=='freetext') return false;
+  var q=normalizeQuestionText(s.question);
+  return q.indexOf('job location')!==-1 || (q.indexOf('location')!==-1 && q.indexOf('job')!==-1);
+}
+function isNOCSection(s){
+  if(s.type!=='freetext') return false;
+  var q=normalizeQuestionText(s.question);
+  return q.indexOf('noc')!==-1 && (q.indexOf('what')!==-1 || q.indexOf('is')!==-1);
+}
 function hasPositionTitleInActiveOutputs(){
   return DATA.some(function(s){
     if(s.type==='fixed') return /\[position title\]/i.test(s.text||'');
@@ -1871,7 +1881,7 @@ function collectSelectedOutputTextParts(){
         if(t) parts.push(htmlToText(t));
       });
     } else if(s.type==='freetext'){
-      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)) return;
+      if(isResearchAwardNameSection(s)||isPositionTitleSection(s)||isJobLocationSection(s)||isNOCSection(s)) return;
       var t2=buildFreeTextOutputText(s,answers[s.id]);
       if(t2) parts.push(t2);
     }
