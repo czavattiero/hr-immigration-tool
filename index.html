@@ -4749,37 +4749,75 @@ function EVL_build(){
     return '';
   }
 
-  // One row per Hire/Rehire action — do not combine/group
+  // Helper: convert a date value (Excel serial or string) to a comparable number
+  function EVL_dateNum(d){
+    if(!d && d !== 0) return 0;
+    var n = parseFloat(d);
+    if(!isNaN(n) && n > 0) return n; // Excel serial
+    var s = String(d).trim();
+    if(!s) return 0;
+    // Try parsing date strings like YYYY-MM-DD or MM/DD/YYYY
+    var dt = new Date(s);
+    return isNaN(dt.getTime()) ? 0 : dt.getTime();
+  }
+
   var hireActions = ['Hire','Rehire'];
   var actKey = rowKeys.find(function(k){ return ['Action','Actn','ACTION'].indexOf(k)>=0; });
   var reasonKey = rowKeys.find(function(k){ return ['Reason','Actn Reason'].indexOf(k)>=0; });
+  var emplRecKey = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='emplrecord'||n==='emplrcd'||n==='record'; });
 
   EVL_periods = [];
-  myRows.forEach(function(r){
-    var action = actKey ? String(r[actKey]||'') : '';
+  myRows.forEach(function(hireRow){
+    var action = actKey ? String(hireRow[actKey]||'') : '';
     if(hireActions.indexOf(action) < 0) return;
-    // Skip cancelled appointments
-    var reason = reasonKey ? String(r[reasonKey]||'') : '';
+    var reason = reasonKey ? String(hireRow[reasonKey]||'') : '';
     if(reason === 'Appointment Cancelled') return;
 
-    var emplType = col(r,['Empl Type','EmplType','Employment Type','Empl Typ']);
-    var startDate = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
-    var endDate   = col(r,['Expected End Date','Exp End Date','End Date','Expected End']);
+    var emplType = col(hireRow,['Empl Type','EmplType','Employment Type','Empl Typ']);
+    var startDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
+
+    // End date: use Eff Date first; fall back to Expected End Date if Eff Date is empty
+    var effDate = col(hireRow,['Eff Date','Effective Date','Eff Dt']);
+    var expectedEnd = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
+    var endDate = effDate || expectedEnd;
+
+    // Find the latest comp rate for this Empl Record across ALL rows (not just Hire/Rehire)
+    // Look for all rows with the same Empl Record, pick the one with the latest Eff Date
+    // that has a comp rate value
+    var thisRecord = emplRecKey ? String(hireRow[emplRecKey]||'') : '';
+    var compRate = col(hireRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+    var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
+    if(thisRecord && emplRecKey){
+      // Get all rows for this Empl Record that have a comp rate
+      var recordRows = myRows.filter(function(r){
+        return String(r[emplRecKey]||'') === thisRecord &&
+               col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
+      });
+      if(recordRows.length > 0){
+        // Sort by Eff Date descending, pick the latest
+        recordRows.sort(function(a,b){
+          return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
+                 EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+        });
+        compRate = col(recordRows[0],['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+        compFreq = col(recordRows[0],['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+      }
+    }
 
     EVL_periods.push({
-      emplRecord:       col(r,['Empl Record','EmplRecord','Empl Rcd','Record']),
-      position:         col(r,['Business Title','Job Title','Position','Title']),
-      noc:              col(r,['NOC','NOC Code','Noc']),
-      faculty:          col(r,['Faculty/Unit','Faculty','Unit','Dept Group']),
-      department:       col(r,['Department','Dept','Dept Name']),
-      employmentStatus: col(r,['Full/Part','Full/Part Time','FT/PT','Status']),
+      emplRecord:       col(hireRow,['Empl Record','EmplRecord','Empl Rcd','Record']),
+      position:         col(hireRow,['Business Title','Job Title','Position','Title']),
+      noc:              col(hireRow,['NOC','NOC Code','Noc']),
+      faculty:          col(hireRow,['Faculty/Unit','Faculty','Unit','Dept Group']),
+      department:       col(hireRow,['Department','Dept','Dept Name']),
+      employmentStatus: col(hireRow,['Full/Part','Full/Part Time','FT/PT','Status']),
       emplType:         emplType,
-      hoursPerWeek:     col(r,['Stnd Hrs/Wk','Std Hrs','Standard Hours','Hours/Week','Hrs/Wk']),
+      hoursPerWeek:     col(hireRow,['Stnd Hrs/Wk','Std Hrs','Standard Hours','Hours/Week','Hrs/Wk']),
       startDate:        startDate,
       endDate:          endDate,
-      compRate:         col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']),
-      compFreq:         col(r,['Comp Freq','Frequency','Comp Frequency','Pay Freq']),
-      benProgram:       String(col(r,['Ben Progrm','Ben Program','Benefit Program','Ben Prog'])||'').trim().toUpperCase()
+      compRate:         compRate,
+      compFreq:         compFreq,
+      benProgram:       String(col(hireRow,['Ben Progrm','Ben Program','Benefit Program','Ben Prog'])||'').trim().toUpperCase()
     });
   });
 
@@ -4788,6 +4826,9 @@ function EVL_build(){
     if(errEl) errEl.textContent='No Hire/Rehire rows found. Actions in file: '+debugActions;
     return;
   }
+
+  // Sort chronologically by startDate
+  EVL_periods.sort(function(a,b){ return EVL_dateNum(a.startDate) - EVL_dateNum(b.startDate); });
 
   // Require time file if any hourly periods
   var hasHourlyPeriods=EVL_periods.some(function(p){ return String(p.emplType||'').trim()==='Hourly'; });
@@ -4798,6 +4839,7 @@ function EVL_build(){
   EVL_renderPreview();
   } catch(ex){ if(errEl) errEl.textContent='Error: '+ex.message; console.error(ex); }
 }
+
 
 
 function EVL_renderPreview(){
