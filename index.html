@@ -2731,9 +2731,9 @@ function buildDocRuleRow(ri,rule,isOpen){
   var docsHtml=buildDocPicker('rule','rules',ri,null,rule.docs||[]);
   var rid=rule.id||('ri'+ri),label=(rule.label||'').trim();
   return '<div class="doc-rule-row" id="doc-rule-row-'+ri+'" data-rid="'+escA(rid)+'">'
-    +'<div class="doc-rule-hdr'+(isOpen?' open':'')+'" data-action="toggleDocRule" data-rid="'+escA(rid)+'" onclick="toggleDocRuleAccordion(\'' + escA(rid) + '\');">'
+    +'<div class="doc-rule-hdr'+(isOpen?' open':'')+'" data-rid="'+escA(rid)+'">'
     +'<div class="doc-rule-main"><span class="doc-rule-num">Rule '+(ri+1)+'</span>'+(label?'<span class="doc-rule-name-preview">'+esc(label)+'</span>':'')+'</div>'
-    +'<div style="display:flex;align-items:center;gap:8px"><button class="btn btn-danger btn-sm" onclick="event.stopPropagation();" data-action="delDocRule" data-ri="'+ri+'">Delete</button><span class="doc-rule-arrow">&#9660;</span></div>'
+    +'<div style="display:flex;align-items:center;gap:8px"><button class="btn btn-danger btn-sm" data-action="delDocRule" data-ri="'+ri+'">Delete</button><span class="doc-rule-arrow">&#9660;</span></div>'
     +'</div>'
     +'<div class="doc-rule-body-wrap'+(isOpen?' open':'')+'">'
     +'<div class="doc-rule-body">'
@@ -2767,6 +2767,13 @@ function renderDocRules(){
     openDocRuleId=null;
   }
   c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule,rule.id===openDocRuleId);}).join('');
+  // Attach click listeners directly to each header
+  c.querySelectorAll('.doc-rule-hdr').forEach(function(hdr){
+    hdr.addEventListener('click',function(e){
+      if(e.target.closest('button')) return;
+      toggleDocRuleAccordion(hdr.dataset.rid);
+    });
+  });
 }
 
 function addDocRule(){
