@@ -708,12 +708,14 @@ textarea.field-input{resize:vertical;min-height:76px;line-height:1.6}
     <div class="doc-rules-outer" id="doc-rules-section" style="margin-top:32px">
       <div class="doc-rules-header">
         <div>
-          <div class="doc-rules-title">&#128203; Document Checklist Rules</div>
+          <div class="doc-rules-title" onclick="toggleDocRulesSection()" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;">&#128203; Document Checklist Rules <span id="doc-rules-section-arrow" class="doc-lib-arrow open">&#9660;</span></div>
           <div class="doc-rules-subtitle">Define which documents to include based on the answers selected. Each rule&rsquo;s documents are included when <strong>all</strong> its conditions are met. Rules with no conditions always include their documents.</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="addDocRule()">+ Add rule</button>
       </div>
+      <div id="doc-rules-body-wrap" class="doc-lib-body-wrap open">
       <div id="doc-rules-list"></div>
+      </div>
     </div>
 
     <!-- Document Library -->
@@ -1904,6 +1906,8 @@ function resetForm(){answers={};renderIntake();}
 /* ===== DOC LIBRARY TOGGLE ===== */
 var docLibOpen=false;
 function toggleDocLib(){var wrap=document.getElementById('doc-lib-body-wrap'),arrow=document.getElementById('doc-lib-arrow');if(!wrap)return;docLibOpen=!docLibOpen;wrap.classList.toggle('open',docLibOpen);if(arrow)arrow.classList.toggle('open',docLibOpen);}
+var docRulesOpen=true;
+function toggleDocRulesSection(){var wrap=document.getElementById('doc-rules-body-wrap'),arrow=document.getElementById('doc-rules-section-arrow');if(!wrap)return;docRulesOpen=!docRulesOpen;wrap.classList.toggle('open',docRulesOpen);if(arrow)arrow.classList.toggle('open',docRulesOpen);}
 
 /* ===== ACCORDION ===== */
 var openAccordionId=null;
