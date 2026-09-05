@@ -2764,8 +2764,7 @@ function renderDocRules(){
   });
   if(touched) saveData();
   if(!DOC_RULES.some(function(rule){return rule.id===openDocRuleId;})){
-    var firstRule=DOC_RULES[0];
-    openDocRuleId=firstRule?firstRule.id:null;
+    openDocRuleId=null;
   }
   c.innerHTML=DOC_RULES.map(function(rule,ri){return buildDocRuleRow(ri,rule,rule.id===openDocRuleId);}).join('');
 }
