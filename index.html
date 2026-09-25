@@ -4804,13 +4804,21 @@ function EVL_build(){
                col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
       });
       if(recordRows.length > 0){
-        // Sort by Eff Date descending, pick the latest
-        recordRows.sort(function(a,b){
-          return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
-                 EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+        // Find the highest comp rate value (Pay Rate Change rows may have higher amounts)
+        var bestRow = null;
+        var bestAmount = -Infinity;
+        recordRows.forEach(function(r){
+          var rateStr = String(col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate'])||'');
+          var amount = parseFloat(rateStr.replace(/[^0-9.]/g,''));
+          if(!isNaN(amount) && amount > bestAmount){
+            bestAmount = amount;
+            bestRow = r;
+          }
         });
-        compRate = col(recordRows[0],['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
-        compFreq = col(recordRows[0],['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+        if(bestRow){
+          compRate = col(bestRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+          compFreq = col(bestRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+        }
       }
     }
 
