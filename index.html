@@ -4789,8 +4789,10 @@ function EVL_build(){
     // End date: find the most recent Expected End Date across all rows with the same Last Start
     // (Data Change/Extension rows update the end date; the hire row may have an earlier one)
     var hireStartDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
+    var hireStartNum = EVL_dateNum(hireStartDate);
     var endDateRows = myRows.filter(function(r){
-      return String(col(r,['Last Start','Start Date','Hire Date','Last Start Date'])||'') === String(hireStartDate||'') &&
+      var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
+      return hireStartNum > 0 && EVL_dateNum(rStart) === hireStartNum &&
              col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '';
     });
     var endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
