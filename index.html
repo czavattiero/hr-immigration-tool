@@ -4786,10 +4786,22 @@ function EVL_build(){
     var emplType = col(hireRow,['Empl Type','EmplType','Employment Type','Empl Typ']);
     var startDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
 
-    // End date: use Eff Date first; fall back to Expected End Date if Eff Date is empty
-    var effDate = col(hireRow,['Eff Date','Effective Date','Eff Dt']);
-    var expectedEnd = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
-    var endDate = effDate || expectedEnd;
+    // End date: find the most recent Expected End Date across all rows with the same Last Start
+    // (Data Change/Extension rows update the end date; the hire row may have an earlier one)
+    var hireStartDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
+    var endDateRows = myRows.filter(function(r){
+      return String(col(r,['Last Start','Start Date','Hire Date','Last Start Date'])||'') === String(hireStartDate||'') &&
+             col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '';
+    });
+    var endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
+    if(endDateRows.length > 0){
+      // Pick the row with the most recent Eff Date — that has the latest/current end date
+      endDateRows.sort(function(a,b){
+        return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
+               EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+      });
+      endDate = col(endDateRows[0],['Expected End Date','Exp End Date','End Date','Expected End']);
+    }
 
     // Find the latest comp rate for this Empl Record across ALL rows (not just Hire/Rehire)
     // Look for all rows with the same Empl Record, pick the one with the latest Eff Date
