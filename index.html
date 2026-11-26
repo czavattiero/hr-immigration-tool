@@ -4934,10 +4934,20 @@ function EVL_renderPreview(){
       hasStarNote = true;
     }
 
-    var payDisplay = p.compRate ? (p.compFreq === 'Hourly' ? '$'+Number(p.compRate).toFixed(2)+'/hr' : '$'+Number(p.compRate).toFixed(2)+'/'+p.compFreq) : '';
+    var freqLabel = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
+    var payDisplay = p.compRate
+      ? (p.emplType === 'Hourly' || /hourly/i.test(p.compFreq)
+          ? '$'+Number(p.compRate).toFixed(2)+'/hr'
+          : '$'+Number(p.compRate).toFixed(2)+(freqLabel ? '/'+freqLabel : ''))
+      : '';
+    var empStatus = p.employmentStatus || '';
+    var hpw = parseFloat(p.hoursPerWeek) || 0;
+    if(String(p.emplType||'').trim() === 'Hourly' || (hpw > 0 && hpw < 30)){
+      empStatus = 'Part-Time';
+    }
     var vals = [
       p.position, p.noc, p.faculty, p.department,
-      p.employmentStatus, hoursCell,
+      empStatus, hoursCell,
       EVL_formatDate(p.startDate), EVL_formatDate(p.endDate),
       payDisplay, benefitCell
     ];
@@ -5148,8 +5158,16 @@ function EVL_download(){
       if(String(p.emplType||'').trim() === 'Hourly') hasHourly = true;
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
-      var pay = p.compRate ? ('$' + Number(p.compRate).toFixed(2) + (p.compFreq === 'Hourly' ? '/hr' : '/' + (p.compFreq||''))) : '';
-      return [p.position||'', p.noc||'', p.faculty||'', p.department||'', p.employmentStatus||'',
+      var freqLbl = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
+      var pay = p.compRate
+        ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
+            ? '$'+Number(p.compRate).toFixed(2)+'/hr'
+            : '$'+Number(p.compRate).toFixed(2)+(freqLbl ? '/'+freqLbl : ''))
+        : '';
+      var hpwW = parseFloat(p.hoursPerWeek) || 0;
+      var empSt = (String(p.emplType||'').trim() === 'Hourly' || (hpwW > 0 && hpwW < 30))
+        ? 'Part-Time' : (p.employmentStatus||'');
+      return [p.position||'', p.noc||'', p.faculty||'', p.department||'', empSt,
               hrs, EVL_formatDate(p.startDate), EVL_formatDate(p.endDate), pay, benefit];
     });
 
