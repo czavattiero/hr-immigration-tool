@@ -4803,7 +4803,14 @@ function EVL_build(){
     var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
 
     function positionMatch(r){
-      if(hireRecord && emplRecKey) return String(r[emplRecKey]||'') === hireRecord;
+      // Match by Empl Record AND start date — Empl Record alone matches all rows for the employee
+      if(hireRecord && emplRecKey){
+        if(String(r[emplRecKey]||'') !== hireRecord) return false;
+        // Also require the row's Last Start to match this hire's start date
+        var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
+        if(hireStartNum > 0 && rStart !== '' && EVL_dateNum(rStart) !== hireStartNum) return false;
+        return true;
+      }
       var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
       if(!(hireStartNum > 0 && EVL_dateNum(rStart) === hireStartNum)) return false;
       var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
@@ -4935,8 +4942,9 @@ function EVL_renderPreview(){
     }
 
     var freqLabel = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
+    if(/^annual$/i.test(freqLabel)) freqLabel = 'year';
     var payDisplay = p.compRate
-      ? (p.emplType === 'Hourly' || /hourly/i.test(p.compFreq)
+      ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
           ? '$'+Number(p.compRate).toFixed(2)+'/hr'
           : '$'+Number(p.compRate).toFixed(2)+(freqLabel ? '/'+freqLabel : ''))
       : '';
@@ -5159,6 +5167,7 @@ function EVL_download(){
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
       var freqLbl = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
+      if(/^annual$/i.test(freqLbl)) freqLbl = 'year';
       var pay = p.compRate
         ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
             ? '$'+Number(p.compRate).toFixed(2)+'/hr'
