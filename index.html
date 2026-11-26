@@ -4974,10 +4974,22 @@ function EVL_renderPreview(){
   }
 }
 
+// EVL_dateNum is defined inside EVL_build() and not visible here.
+// This top-level copy is used by EVL_calcHours().
+function EVL_dateNumGlobal(d){
+  if(!d && d !== 0) return 0;
+  var n = parseFloat(d);
+  if(!isNaN(n) && n > 0) return n;
+  var s = String(d).trim();
+  if(!s) return 0;
+  var dt = new Date(s);
+  return isNaN(dt.getTime()) ? 0 : dt.getTime();
+}
+
 function EVL_calcHours(startDate, endDate){
   if(!EVL_timeRows.length) return 0;
-  var startNum = EVL_dateNum(startDate||'');
-  var endNum   = EVL_dateNum(endDate||'');
+  var startNum = EVL_dateNumGlobal(startDate||'');
+  var endNum   = EVL_dateNumGlobal(endDate||'');
   var timeKeys = Object.keys(EVL_timeRows[0]);
   var errEl = document.getElementById('evl-error');
   var hoursKey = null;
@@ -5025,7 +5037,7 @@ function EVL_calcHours(startDate, endDate){
   EVL_timeRows.forEach(function(r){
     // Filter to rows within this position's period (startDate inclusive, endDate inclusive)
     if(dateKey && startNum > 0 && endNum > 0){
-      var rowDateNum = EVL_dateNum(r[dateKey]);
+      var rowDateNum = EVL_dateNumGlobal(r[dateKey]);
       if(rowDateNum < startNum || rowDateNum > endNum) return;
     }
     total += parseFloat(r[hoursKey]||0)||0;
