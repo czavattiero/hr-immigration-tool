@@ -4793,14 +4793,10 @@ function EVL_build(){
     //       and take comp rate from that same Term Date row.
     //       If no Term Date (active/ongoing), fall back to Expected End Date
     //       and use comp rate from the hire row.
-    // Position matching: Empl Record (primary), or Last Start + position title (fallback).
     var hireStartDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
     var hireStartNum = EVL_dateNum(hireStartDate);
     var hireRecord   = emplRecKey ? String(hireRow[emplRecKey]||'') : '';
     var hirePosition = col(hireRow,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
-
-    var compRate = col(hireRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
-    var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
 
     function positionMatch(r){
       if(hireRecord && emplRecKey) return String(r[emplRecKey]||'') === hireRecord;
@@ -4810,7 +4806,9 @@ function EVL_build(){
       return rPos === hirePosition;
     }
 
-    // Look for Term Date rows for this position
+    var compRate = col(hireRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+    var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
+
     var termRows = myRows.filter(function(r){
       return col(r,['Term Date','Termination Date','Term Dt']) !== '' && positionMatch(r);
     });
@@ -4974,10 +4972,22 @@ function EVL_renderPreview(){
   }
 }
 
+// Top-level date converter so EVL_calcHours can use it (EVL_dateNum is also defined
+// inside EVL_build but that scope is not visible here).
+function EVL_dateNumGlobal(d){
+  if(!d && d !== 0) return 0;
+  var n = parseFloat(d);
+  if(!isNaN(n) && n > 0) return n;
+  var s = String(d).trim();
+  if(!s) return 0;
+  var dt = new Date(s);
+  return isNaN(dt.getTime()) ? 0 : dt.getTime();
+}
+
 function EVL_calcHours(startDate, endDate){
   if(!EVL_timeRows.length) return 0;
-  var startNum = EVL_dateNum(startDate||'');
-  var endNum   = EVL_dateNum(endDate||'');
+  var startNum = EVL_dateNumGlobal(startDate||'');
+  var endNum   = EVL_dateNumGlobal(endDate||'');
   var timeKeys = Object.keys(EVL_timeRows[0]);
   var errEl = document.getElementById('evl-error');
   var hoursKey = null;
@@ -5006,8 +5016,8 @@ function EVL_calcHours(startDate, endDate){
     if(errEl) errEl.textContent = 'Could not find hours column in time file. Columns: ' + timeKeys.slice(0,8).join(' | ');
     return 0;
   }
-  var total = 0;
-  // Find the Rpt Dt date column to filter rows to this position's period
+
+  // Find date column (Rpt Dt) to filter rows to this position's period
   var dateKey = null;
   var dateAliases = ['Rpt Dt','Rpt Date','Report Date','Work Date','Pay Period End',
                      'Pay Period Begin','Earnings End Date','Date','Pay Date'];
@@ -5016,16 +5026,16 @@ function EVL_calcHours(startDate, endDate){
   }
   if(!dateKey){
     dateKey = timeKeys.find(function(k){
-      var n = k.toLowerCase();
-      return n.indexOf('date')>=0 || n==='rpt dt' || n.endsWith(' dt');
+      var nl = k.toLowerCase();
+      return nl.indexOf('date')>=0 || nl==='rpt dt' || nl.endsWith(' dt');
     }) || null;
   }
 
   var total = 0;
   EVL_timeRows.forEach(function(r){
-    // Filter to rows within this position's period (startDate inclusive, endDate inclusive)
+    // Only count rows whose date falls within this position's period
     if(dateKey && startNum > 0 && endNum > 0){
-      var rowDateNum = EVL_dateNum(r[dateKey]);
+      var rowDateNum = EVL_dateNumGlobal(r[dateKey]);
       if(rowDateNum < startNum || rowDateNum > endNum) return;
     }
     total += parseFloat(r[hoursKey]||0)||0;
