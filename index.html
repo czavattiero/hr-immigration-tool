@@ -4788,45 +4788,59 @@ function EVL_build(){
     var emplType = col(hireRow,['Empl Type','EmplType','Employment Type','Empl Typ']);
     var startDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
 
-    // End date: find the most recent Expected End Date across all rows with the same Last Start
-    // (Data Change/Extension rows update the end date; the hire row may have an earlier one)
+    // End date and comp rate:
+    // Rule: if a Term Date row exists for this position, use Term Date as end date
+    //       and take comp rate from that same Term Date row.
+    //       If no Term Date (active/ongoing), fall back to Expected End Date
+    //       and use comp rate from the hire row.
+    // Position matching: Empl Record (primary), or Last Start + position title (fallback).
     var hireStartDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
     var hireStartNum = EVL_dateNum(hireStartDate);
-    var endDateRows = myRows.filter(function(r){
-      var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
-      return hireStartNum > 0 && EVL_dateNum(rStart) === hireStartNum &&
-             col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '';
-    });
-    var endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
-    if(endDateRows.length > 0){
-      // Pick the row with the most recent Eff Date — that has the latest/current end date
-      endDateRows.sort(function(a,b){
-        return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
-               EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
-      });
-      endDate = col(endDateRows[0],['Expected End Date','Exp End Date','End Date','Expected End']);
-    }
+    var hireRecord   = emplRecKey ? String(hireRow[emplRecKey]||'') : '';
+    var hirePosition = col(hireRow,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
 
-    // Find the latest comp rate for this Empl Record across ALL rows (not just Hire/Rehire)
-    // Look for all rows with the same Empl Record, pick the one with the latest Eff Date
-    // that has a comp rate value
-    var thisRecord = emplRecKey ? String(hireRow[emplRecKey]||'') : '';
     var compRate = col(hireRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
     var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
-    if(thisRecord && emplRecKey){
-      // Get all rows for this Empl Record that have a comp rate
-      var recordRows = myRows.filter(function(r){
-        return String(r[emplRecKey]||'') === thisRecord &&
-               col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
+
+    function positionMatch(r){
+      if(hireRecord && emplRecKey) return String(r[emplRecKey]||'') === hireRecord;
+      var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
+      if(!(hireStartNum > 0 && EVL_dateNum(rStart) === hireStartNum)) return false;
+      var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
+      return rPos === hirePosition;
+    }
+
+    // Look for Term Date rows for this position
+    var termRows = myRows.filter(function(r){
+      return col(r,['Term Date','Termination Date','Term Dt']) !== '' && positionMatch(r);
+    });
+
+    var endDate = '';
+    if(termRows.length > 0){
+      // Terminated: Term Date is the end date; comp rate from that same row
+      termRows.sort(function(a,b){
+        return EVL_dateNum(col(b,['Term Date','Termination Date','Term Dt'])) -
+               EVL_dateNum(col(a,['Term Date','Termination Date','Term Dt']));
       });
-      if(recordRows.length > 0){
-        // Use the most recent comp rate (row with the latest Eff Date)
-        recordRows.sort(function(a,b){
+      var termRow = termRows[0];
+      endDate = col(termRow,['Term Date','Termination Date','Term Dt']);
+      var termRate = col(termRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+      if(termRate !== ''){
+        compRate = termRate;
+        compFreq = col(termRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+      }
+    } else {
+      // Active/ongoing: Expected End Date; comp rate stays from hire row
+      var expEndRows = myRows.filter(function(r){
+        return col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '' && positionMatch(r);
+      });
+      endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
+      if(expEndRows.length > 0){
+        expEndRows.sort(function(a,b){
           return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
                  EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
         });
-        compRate = col(recordRows[0],['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
-        compFreq = col(recordRows[0],['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+        endDate = col(expEndRows[0],['Expected End Date','Exp End Date','End Date','Expected End']);
       }
     }
 
@@ -4948,7 +4962,7 @@ function EVL_renderPreview(){
   }
   if(hasHourly){
     EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
-      var totalHours = EVL_calcHours();
+      var totalHours = EVL_calcHours(p.startDate, p.endDate);
       var periodText = p.endDate
         ? 'For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate)
         : 'Since ' + EVL_formatDate(p.startDate);
@@ -4960,8 +4974,10 @@ function EVL_renderPreview(){
   }
 }
 
-function EVL_calcHours(){
+function EVL_calcHours(startDate, endDate){
   if(!EVL_timeRows.length) return 0;
+  var startNum = EVL_dateNum(startDate||'');
+  var endNum   = EVL_dateNum(endDate||'');
   var timeKeys = Object.keys(EVL_timeRows[0]);
   var errEl = document.getElementById('evl-error');
   var hoursKey = null;
@@ -4991,7 +5007,29 @@ function EVL_calcHours(){
     return 0;
   }
   var total = 0;
-  EVL_timeRows.forEach(function(r){ total += parseFloat(r[hoursKey]||0)||0; });
+  // Find the Rpt Dt date column to filter rows to this position's period
+  var dateKey = null;
+  var dateAliases = ['Rpt Dt','Rpt Date','Report Date','Work Date','Pay Period End',
+                     'Pay Period Begin','Earnings End Date','Date','Pay Date'];
+  for(var di=0; di<dateAliases.length; di++){
+    if(EVL_timeRows[0].hasOwnProperty(dateAliases[di])){ dateKey = dateAliases[di]; break; }
+  }
+  if(!dateKey){
+    dateKey = timeKeys.find(function(k){
+      var n = k.toLowerCase();
+      return n.indexOf('date')>=0 || n==='rpt dt' || n.endsWith(' dt');
+    }) || null;
+  }
+
+  var total = 0;
+  EVL_timeRows.forEach(function(r){
+    // Filter to rows within this position's period (startDate inclusive, endDate inclusive)
+    if(dateKey && startNum > 0 && endNum > 0){
+      var rowDateNum = EVL_dateNum(r[dateKey]);
+      if(rowDateNum < startNum || rowDateNum > endNum) return;
+    }
+    total += parseFloat(r[hoursKey]||0)||0;
+  });
   total = Math.round(total * 100) / 100;
   if(total === 0 && errEl){
     errEl.textContent = 'Hours column "' + hoursKey + '" found but total is 0. Sample value: ' + JSON.stringify(EVL_timeRows[0][hoursKey]);
@@ -5165,7 +5203,7 @@ function EVL_download(){
     }
     if(hasHourly){
       EVL_periods.filter(function(p){ return String(p.emplType||'').trim() === 'Hourly'; }).forEach(function(p){
-        var totalHours = EVL_calcHours();
+        var totalHours = EVL_calcHours(p.startDate, p.endDate);
         var periodText = p.endDate
           ? 'For the period of ' + EVL_formatDate(p.startDate) + ' to ' + EVL_formatDate(p.endDate)
           : 'Since ' + EVL_formatDate(p.startDate);
