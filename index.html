@@ -4803,18 +4803,15 @@ function EVL_build(){
     var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
 
     function positionMatch(r){
-      // Match by Empl Record AND start date — Empl Record alone matches all rows for the employee
-      if(hireRecord && emplRecKey){
-        if(String(r[emplRecKey]||'') !== hireRecord) return false;
-        // Also require the row's Last Start to match this hire's start date
-        var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
-        if(hireStartNum > 0 && rStart !== '' && EVL_dateNum(rStart) !== hireStartNum) return false;
-        return true;
-      }
+      // Must match Last Start date
       var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
-      if(!(hireStartNum > 0 && EVL_dateNum(rStart) === hireStartNum)) return false;
+      if(hireStartNum > 0 && rStart !== '' && EVL_dateNum(rStart) !== hireStartNum) return false;
+      // Must match Empl Record if available
+      if(hireRecord && emplRecKey && String(r[emplRecKey]||'') !== hireRecord) return false;
+      // Must match Position Descr — prevents two positions with the same start date colliding
       var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
-      return rPos === hirePosition;
+      if(hirePosition && rPos && rPos !== hirePosition) return false;
+      return true;
     }
 
     // Look for Term Date rows for this position
@@ -4857,8 +4854,11 @@ function EVL_build(){
         });
         if(rateRows.length > 0){
           rateRows.sort(function(a,b){
-            return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
-                   EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+            var da = EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+            var db = EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt']));
+            if(db !== da) return db - da;
+            // Same Eff Date: use original row order (last row in file wins — most recent rate)
+            return myRows.indexOf(b) - myRows.indexOf(a);
           });
           var latestRateRow = rateRows[0];
           compRate = col(latestRateRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
@@ -4957,8 +4957,10 @@ function EVL_renderPreview(){
       hasStarNote = true;
     }
 
-    var freqLabel = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
-    if(/^annual$/i.test(freqLabel) || /annual/i.test(p.compFreq)) freqLabel = 'year';
+    var freqLabel = String(p.compFreq||'').replace(/\bDefault\b/i,'').replace(/\bNA\b/,'').trim();
+    if(/annual/i.test(p.compFreq)) freqLabel = 'year';
+    else if(/hourly/i.test(p.compFreq)) freqLabel = '';
+    else if(/monthly/i.test(p.compFreq)) freqLabel = 'month';
     var payDisplay = p.compRate
       ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
           ? '$'+Number(p.compRate).toFixed(2)+'/hr'
@@ -5182,8 +5184,10 @@ function EVL_download(){
       if(String(p.emplType||'').trim() === 'Hourly') hasHourly = true;
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
-      var freqLbl = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
-      if(/^annual$/i.test(freqLbl) || /annual/i.test(p.compFreq)) freqLbl = 'year';
+      var freqLbl = String(p.compFreq||'').replace(/\bDefault\b/i,'').replace(/\bNA\b/,'').trim();
+      if(/annual/i.test(p.compFreq)) freqLbl = 'year';
+      else if(/hourly/i.test(p.compFreq)) freqLbl = '';
+      else if(/monthly/i.test(p.compFreq)) freqLbl = 'month';
       var pay = p.compRate
         ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
             ? '$'+Number(p.compRate).toFixed(2)+'/hr'
