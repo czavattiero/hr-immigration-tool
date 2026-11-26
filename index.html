@@ -4773,56 +4773,85 @@ function EVL_build(){
     return isNaN(dt.getTime()) ? 0 : dt.getTime();
   }
 
-  var hireActions = ['Hire','Rehire','Job Movements','Transfer','Promotion','Demotion','Lateral'];
-  var actKey = rowKeys.find(function(k){ return ['Action','Actn','ACTION'].indexOf(k)>=0; });
+  var trueHireActions   = ['Hire','Rehire'];
+  var movementActions   = ['Job Movements','Transfer','Promotion','Demotion','Lateral',
+                           'Promotion within staff group','Demotion within staff group'];
+  var allStartActions   = trueHireActions.concat(movementActions);
+  var actKey    = rowKeys.find(function(k){ return ['Action','Actn','ACTION'].indexOf(k)>=0; });
   var reasonKey = rowKeys.find(function(k){ return ['Reason','Actn Reason'].indexOf(k)>=0; });
-  var emplRecKey = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='emplrecord'||n==='emplrcd'||n==='record'; });
+  var emplRecKey= rowKeys.find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='emplrecord'||n==='emplrcd'||n==='record'; });
+
+  // Helper: pick the best start date for an anchor row.
+  // For movements/promotions the Eff Date is the real start of that role;
+  // for Hire/Rehire we use Last Start.
+  function anchorStartDate(r){
+    var action = actKey ? String(r[actKey]||'') : '';
+    if(movementActions.indexOf(action) >= 0){
+      var ed = col(r,['Eff Date','Effective Date','Eff Dt']);
+      if(ed) return ed;
+    }
+    return col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
+  }
+
+  // Collect anchor rows (one per distinct position period)
+  var anchorRows = myRows.filter(function(r){
+    var action = actKey ? String(r[actKey]||'') : '';
+    if(allStartActions.indexOf(action) < 0) return false;
+    var reason = reasonKey ? String(r[reasonKey]||'') : '';
+    if(reason === 'Appointment Cancelled') return false;
+    return true;
+  });
+
+  // Sort anchors chronologically by their effective start date
+  anchorRows.sort(function(a,b){
+    return EVL_dateNum(anchorStartDate(a)) - EVL_dateNum(anchorStartDate(b));
+  });
 
   EVL_periods = [];
-  myRows.forEach(function(hireRow){
-    var action = actKey ? String(hireRow[actKey]||'') : '';
-    if(hireActions.indexOf(action) < 0) return;
-    var reason = reasonKey ? String(hireRow[reasonKey]||'') : '';
-    if(reason === 'Appointment Cancelled') return;
 
-    var emplType = col(hireRow,['Empl Type','EmplType','Employment Type','Empl Typ']);
-    var startDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
-
-    // End date and comp rate:
-    // Rule: if a Term Date row exists for this position, use Term Date as end date
-    //       and take comp rate from that same Term Date row.
-    //       If no Term Date (active/ongoing), fall back to Expected End Date
-    //       and use comp rate from the hire row.
-    // Position matching: Empl Record (primary), or Last Start + position title (fallback).
-    var hireStartDate = col(hireRow,['Last Start','Start Date','Hire Date','Last Start Date']);
-    var hireStartNum = EVL_dateNum(hireStartDate);
+  anchorRows.forEach(function(hireRow, anchorIdx){
     var hireRecord   = emplRecKey ? String(hireRow[emplRecKey]||'') : '';
     var hirePosition = col(hireRow,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
+    var startDate    = anchorStartDate(hireRow);
+    var startNum     = EVL_dateNum(startDate);
+    var emplType     = col(hireRow,['Empl Type','EmplType','Employment Type','Empl Typ']);
+
+    // Find the next anchor on the SAME empl record (for end-date capping of non-terminated positions)
+    var nextAnchorStartNum = 0;
+    for(var ni = anchorIdx + 1; ni < anchorRows.length; ni++){
+      var nr = anchorRows[ni];
+      var nRec = emplRecKey ? String(nr[emplRecKey]||'') : '';
+      if(!hireRecord || !nRec || nRec === hireRecord){
+        nextAnchorStartNum = EVL_dateNum(anchorStartDate(nr));
+        break;
+      }
+    }
 
     var compRate = col(hireRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
     var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
 
-    function positionMatch(r){
-      // Must match Last Start date (if row has one)
-      var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
-      if(hireStartNum > 0 && rStart !== '' && EVL_dateNum(rStart) !== hireStartNum) return false;
-      // Must match Empl Record if available
-      if(hireRecord && emplRecKey && String(r[emplRecKey]||'') !== hireRecord) return false;
-      // Must match Position Descr when BOTH sides are non-empty — prevents two positions
-      // with same start date from colliding, but still matches rows with no position column
-      var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
-      if(hirePosition && rPos !== '' && rPos !== hirePosition) return false;
-      return true;
+    // Rows that belong to this position period:
+    // same Empl Record, Position Descr matches (when present), Eff Date >= startNum,
+    // and Eff Date < nextAnchorStartNum (if there is a next period on this record)
+    function periodRows(){
+      return myRows.filter(function(r){
+        if(hireRecord && emplRecKey && String(r[emplRecKey]||'') !== hireRecord) return false;
+        var rEffNum = EVL_dateNum(col(r,['Eff Date','Effective Date','Eff Dt']));
+        if(startNum > 0 && rEffNum > 0 && rEffNum < startNum) return false;
+        if(nextAnchorStartNum > 0 && rEffNum >= nextAnchorStartNum) return false;
+        var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
+        if(hirePosition && rPos !== '' && rPos !== hirePosition) return false;
+        return true;
+      });
     }
 
-    // Look for Term Date rows for this position
-    var termRows = myRows.filter(function(r){
-      return col(r,['Term Date','Termination Date','Term Dt']) !== '' && positionMatch(r);
+    // Term Date rows in this period
+    var termRows = periodRows().filter(function(r){
+      return col(r,['Term Date','Termination Date','Term Dt']) !== '';
     });
 
     var endDate = '';
     if(termRows.length > 0){
-      // Terminated: Term Date is the end date; comp rate from that same row
       termRows.sort(function(a,b){
         return EVL_dateNum(col(b,['Term Date','Termination Date','Term Dt'])) -
                EVL_dateNum(col(a,['Term Date','Termination Date','Term Dt']));
@@ -4830,14 +4859,11 @@ function EVL_build(){
       var termRow = termRows[0];
       endDate = col(termRow,['Term Date','Termination Date','Term Dt']);
       var termRate = col(termRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
-      if(termRate !== ''){
-        compRate = termRate;
-        compFreq = col(termRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
-      }
+      if(termRate !== ''){ compRate = termRate; compFreq = col(termRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq; }
     } else {
-      // Active/ongoing: Expected End Date; comp rate from most recent row for this position
-      var allMatchRows = myRows.filter(function(r){ return positionMatch(r); });
-      var expEndRows = allMatchRows.filter(function(r){
+      // Active / mid-career: use Expected End Date if present
+      var allP = periodRows();
+      var expEndRows = allP.filter(function(r){
         return col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '';
       });
       endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
@@ -4848,29 +4874,25 @@ function EVL_build(){
         });
         endDate = col(expEndRows[0],['Expected End Date','Exp End Date','End Date','Expected End']);
       }
-      // Use comp rate from the most recent row (by Eff Date) that has one
-      if(allMatchRows.length > 0){
-        var rateRows = allMatchRows.filter(function(r){
-          return col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
+      // Most recent comp rate in this period (by Eff Date, row order as tiebreaker)
+      var rateRows = allP.filter(function(r){
+        return col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
+      });
+      if(rateRows.length > 0){
+        rateRows.sort(function(a,b){
+          var da = EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+          var db = EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt']));
+          if(db !== da) return db - da;
+          return myRows.indexOf(b) - myRows.indexOf(a);
         });
-        if(rateRows.length > 0){
-          rateRows.sort(function(a,b){
-            var da = EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
-            var db = EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt']));
-            if(db !== da) return db - da;
-            // Same Eff Date: use original row order (last row in file wins — most recent rate)
-            return myRows.indexOf(b) - myRows.indexOf(a);
-          });
-          var latestRateRow = rateRows[0];
-          compRate = col(latestRateRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
-          compFreq = col(latestRateRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
-        }
+        compRate = col(rateRows[0],['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+        compFreq = col(rateRows[0],['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
       }
     }
 
     EVL_periods.push({
       emplRecord:       col(hireRow,['Empl Record','EmplRecord','Empl Rcd','Record']),
-      position:         col(hireRow,['Business Title','Job Title','Position','Title']),
+      position:         col(hireRow,['Position Descr','Job Code Descr','Business Title','Job Title','Position','Title']),
       noc:              col(hireRow,['NOC','NOC Code','Noc']),
       faculty:          col(hireRow,['Faculty/Unit','Faculty','Unit','Dept Group']),
       department:       col(hireRow,['Department','Dept','Dept Name']),
