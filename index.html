@@ -4803,14 +4803,15 @@ function EVL_build(){
     var compFreq = col(hireRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']);
 
     function positionMatch(r){
-      // Must match Last Start date
+      // Must match Last Start date (if row has one)
       var rStart = col(r,['Last Start','Start Date','Hire Date','Last Start Date']);
       if(hireStartNum > 0 && rStart !== '' && EVL_dateNum(rStart) !== hireStartNum) return false;
       // Must match Empl Record if available
       if(hireRecord && emplRecKey && String(r[emplRecKey]||'') !== hireRecord) return false;
-      // Must match Position Descr — prevents two positions with the same start date colliding
+      // Must match Position Descr when BOTH sides are non-empty — prevents two positions
+      // with same start date from colliding, but still matches rows with no position column
       var rPos = col(r,['Position Descr','Job Code Descr','Business Title','Job Title','Position']);
-      if(hirePosition && rPos && rPos !== hirePosition) return false;
+      if(hirePosition && rPos !== '' && rPos !== hirePosition) return false;
       return true;
     }
 
