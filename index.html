@@ -4773,7 +4773,7 @@ function EVL_build(){
     return isNaN(dt.getTime()) ? 0 : dt.getTime();
   }
 
-  var hireActions = ['Hire','Rehire'];
+  var hireActions = ['Hire','Rehire','Job Movements','Transfer','Promotion','Demotion','Lateral'];
   var actKey = rowKeys.find(function(k){ return ['Action','Actn','ACTION'].indexOf(k)>=0; });
   var reasonKey = rowKeys.find(function(k){ return ['Reason','Actn Reason'].indexOf(k)>=0; });
   var emplRecKey = rowKeys.find(function(k){ var n=k.toLowerCase().replace(/\s/g,''); return n==='emplrecord'||n==='emplrcd'||n==='record'; });
@@ -4885,13 +4885,9 @@ function EVL_build(){
     });
   });
 
-  // Debug: always show what was found
-  var debugActions=[...new Set(myRows.map(function(r){ return JSON.stringify(String(r[actKey]||'(no action)')); }))].join(', ');
-  var debugPositions=EVL_periods.map(function(p){ return p.position+'('+p.startDate+')'; }).join(' | ');
-  if(errEl) errEl.textContent='DEBUG: Actions='+debugActions+' | Periods='+debugPositions;
-
   if(!EVL_periods.length){
-    if(errEl) errEl.textContent='No Hire/Rehire rows found. Actions in file: '+debugActions;
+    var debugActions=[...new Set(myRows.map(function(r){ return String(r[actKey]||'(no action)'); }))].join(', ');
+    if(errEl) errEl.textContent='No position rows found. Actions in file: '+debugActions;
     return;
   }
 
