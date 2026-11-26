@@ -4837,9 +4837,10 @@ function EVL_build(){
         compFreq = col(termRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
       }
     } else {
-      // Active/ongoing: Expected End Date; comp rate stays from hire row
-      var expEndRows = myRows.filter(function(r){
-        return col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '' && positionMatch(r);
+      // Active/ongoing: Expected End Date; comp rate from most recent row for this position
+      var allMatchRows = myRows.filter(function(r){ return positionMatch(r); });
+      var expEndRows = allMatchRows.filter(function(r){
+        return col(r,['Expected End Date','Exp End Date','End Date','Expected End']) !== '';
       });
       endDate = col(hireRow,['Expected End Date','Exp End Date','End Date','Expected End']);
       if(expEndRows.length > 0){
@@ -4848,6 +4849,21 @@ function EVL_build(){
                  EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
         });
         endDate = col(expEndRows[0],['Expected End Date','Exp End Date','End Date','Expected End']);
+      }
+      // Use comp rate from the most recent row (by Eff Date) that has one
+      if(allMatchRows.length > 0){
+        var rateRows = allMatchRows.filter(function(r){
+          return col(r,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']) !== '';
+        });
+        if(rateRows.length > 0){
+          rateRows.sort(function(a,b){
+            return EVL_dateNum(col(b,['Eff Date','Effective Date','Eff Dt'])) -
+                   EVL_dateNum(col(a,['Eff Date','Effective Date','Eff Dt']));
+          });
+          var latestRateRow = rateRows[0];
+          compRate = col(latestRateRow,['Current Comp Rate','Comp Rate','Rate','Salary','Compensation Rate']);
+          compFreq = col(latestRateRow,['Comp Freq','Frequency','Comp Frequency','Pay Freq']) || compFreq;
+        }
       }
     }
 
@@ -4942,7 +4958,7 @@ function EVL_renderPreview(){
     }
 
     var freqLabel = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
-    if(/^annual$/i.test(freqLabel)) freqLabel = 'year';
+    if(/^annual$/i.test(freqLabel) || /annual/i.test(p.compFreq)) freqLabel = 'year';
     var payDisplay = p.compRate
       ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
           ? '$'+Number(p.compRate).toFixed(2)+'/hr'
@@ -5167,7 +5183,7 @@ function EVL_download(){
       else if(String(p.position||'').toLowerCase().indexOf('professor') >= 0 || String(p.position||'').toLowerCase().indexOf('postdoctoral') >= 0){ benefit = '*'; hasStarNote = true; }
       var hrs = String(p.emplType||'').trim() === 'Hourly' ? '***' : (p.hoursPerWeek ? Number(p.hoursPerWeek).toFixed(2) : '');
       var freqLbl = String(p.compFreq||'').replace(/Default NA (Hourly|Annual)/i,'').trim();
-      if(/^annual$/i.test(freqLbl)) freqLbl = 'year';
+      if(/^annual$/i.test(freqLbl) || /annual/i.test(p.compFreq)) freqLbl = 'year';
       var pay = p.compRate
         ? (String(p.emplType||'').trim() === 'Hourly' || /hourly/i.test(p.compFreq)
             ? '$'+Number(p.compRate).toFixed(2)+'/hr'
