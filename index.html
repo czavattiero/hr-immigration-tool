@@ -4885,8 +4885,12 @@ function EVL_build(){
     });
   });
 
+  // Debug: always show what was found
+  var debugActions=[...new Set(myRows.map(function(r){ return JSON.stringify(String(r[actKey]||'(no action)')); }))].join(', ');
+  var debugPositions=EVL_periods.map(function(p){ return p.position+'('+p.startDate+')'; }).join(' | ');
+  if(errEl) errEl.textContent='DEBUG: Actions='+debugActions+' | Periods='+debugPositions;
+
   if(!EVL_periods.length){
-    var debugActions=[...new Set(myRows.map(function(r){ return String(r[actKey]||'(no action)'); }))].join(', ');
     if(errEl) errEl.textContent='No Hire/Rehire rows found. Actions in file: '+debugActions;
     return;
   }
